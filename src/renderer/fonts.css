@@ -1,0 +1,26 @@
+/* Bundled offline broadcast fonts (Fontsource, SIL OFL) */
+@import url('../../node_modules/@fontsource/barlow-condensed/400.css');
+@import url('../../node_modules/@fontsource/barlow-condensed/500.css');
+@import url('../../node_modules/@fontsource/barlow-condensed/600.css');
+@import url('../../node_modules/@fontsource/barlow-condensed/700.css');
+@import url('../../node_modules/@fontsource/barlow-condensed/800.css');
+@import url('../../node_modules/@fontsource/barlow-condensed/400-italic.css');
+@import url('../../node_modules/@fontsource/barlow-condensed/700-italic.css');
+@import url('../../node_modules/@fontsource/oswald/400.css');
+@import url('../../node_modules/@fontsource/oswald/500.css');
+@import url('../../node_modules/@fontsource/oswald/600.css');
+@import url('../../node_modules/@fontsource/oswald/700.css');
+@import url('../../node_modules/@fontsource/anton/400.css');
+@import url('../../node_modules/@fontsource/teko/400.css');
+@import url('../../node_modules/@fontsource/teko/500.css');
+@import url('../../node_modules/@fontsource/teko/600.css');
+@import url('../../node_modules/@fontsource/teko/700.css');
+@import url('../../node_modules/@fontsource/roboto-condensed/400.css');
+@import url('../../node_modules/@fontsource/roboto-condensed/500.css');
+@import url('../../node_modules/@fontsource/roboto-condensed/700.css');
+@import url('../../node_modules/@fontsource/roboto-condensed/800.css');
+@import url('../../node_modules/@fontsource/roboto-condensed/400-italic.css');
+@import url('../../node_modules/@fontsource/archivo-narrow/400.css');
+@import url('../../node_modules/@fontsource/archivo-narrow/600.css');
+@import url('../../node_modules/@fontsource/archivo-narrow/700.css');
+@import url('../../node_modules/@fontsource/bebas-neue/400.css');

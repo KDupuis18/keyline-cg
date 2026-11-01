@@ -1,0 +1,17 @@
+/* Graphics objects — shared by editor monitors and output windows */
+.stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden}
+.layer{position:absolute;inset:0}
+.go{position:absolute;transform-origin:50% 50%}
+.go>.f{position:absolute;inset:0}
+.go-text{display:flex;align-items:center;line-height:1.05}
+.go-text>span{display:inline-block;white-space:pre}
+.go-img>img{width:100%;height:100%;display:block;max-width:none}
+.go-ticker{display:block;overflow:hidden;white-space:nowrap}
+.go-ticker .tk{position:absolute;left:0;top:0;will-change:transform}
+.go-ticker.crawl .tk{height:100%;display:flex;align-items:center}
+.go-ticker.crawl .tk>span{white-space:pre;padding-right:0}
+.go-ticker.roll .tk{width:100%}
+.go-ticker.roll .tk>div{line-height:1.25;white-space:nowrap}
+.c3d{position:absolute;inset:0;width:100%;height:100%}
+.go-img>video{width:100%;height:100%;display:block}
+.go-empty{display:flex;align-items:center;justify-content:center;background:repeating-linear-gradient(45deg,rgba(255,255,255,.08) 0 20px,rgba(255,255,255,.02) 20px 40px);color:rgba(255,255,255,.6);font:600 28px sans-serif;outline:2px dashed rgba(255,255,255,.4)}

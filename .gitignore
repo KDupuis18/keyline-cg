@@ -1,0 +1,6 @@
+node_modules/
+dist/
+test/shots/
+test/fake-ndi/*.json
+test/fake-ndi/*.bgra
+test/fake-ndi/*.so

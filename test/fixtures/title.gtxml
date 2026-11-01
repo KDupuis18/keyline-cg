@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Composition Width="1280" Height="720">
+  <Layer Name="Lower">
+    <Rectangle Name="Box" X="60" Y="540" Width="700" Height="110" Fill="#CC1E4A8C"/>
+    <Text Name="Headline.Text" X="80" Y="550" Width="660" Height="56" FontSize="40" FontFamily="Segoe UI" Foreground="#FFFFFF" Text="Breaking headline"/>
+    <Text Name="Subtitle.Text" X="80" Y="605" Width="660" Height="36" FontSize="26" Foreground="#FFDDDDDD" Text="Second line"/>
+    <Image Name="Logo.Source" X="780" Y="540" Width="110" Height="110" Source="logo.png"/>
+  </Layer>
+</Composition>

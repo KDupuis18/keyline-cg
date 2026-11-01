@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Keyline CG Studio control panel for Ross DashBoard (CustomPanel). Generated 2026-11-01T15:41:28.869Z for project "Sample Project".
+     Open in DashBoard: File > Open, or drop into a CustomPanel folder. Sends RossTalk to Keyline (default TCP 7788). -->
+<abs contexttype="opengear" id="_top" keepalive="false" style="bg#2b2f36;" width="1040" height="590">
+   <meta>
+      <params>
+         <param access="1" maxlength="0" name="Keyline Host" oid="keyline_host" type="STRING" value="127.0.0.1" widget="text"/>
+         <param access="1" constrainttype="INT_NULL" name="Keyline RossTalk Port" oid="keyline_port" precision="0" type="INT32" value="7788" widget="default"/>
+      </params>
+   </meta>
+   <label height="30" left="20" name="KEYLINE CG STUDIO · Sample Project" style="txt-align:west;font:bold;size:Bigger;fg#ffffff;" top="10" width="600"/>
+   <label height="24" left="20" name="Host" style="txt-align:west;fg#cccccc;" top="48" width="40"/>
+   <param expand="true" height="26" left="64" oid="keyline_host" top="46" width="200"/>
+   <label height="24" left="280" name="Port" style="txt-align:west;fg#cccccc;" top="48" width="40"/>
+   <param expand="true" height="26" left="320" oid="keyline_port" top="46" width="90"/>
+   <button buttontype="push" height="60" left="20" name="TAKE NEXT" style="bg#dd2222;txt-align:center;" top="90" width="150">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'NEXT');</task>
+   </button>
+   <button buttontype="push" height="60" left="180" name="CLEAR ALL" style="txt-align:center;" top="90" width="150">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'CLRA');</task>
+   </button>
+   <button buttontype="push" height="60" left="340" name="UP" style="txt-align:center;" top="90" width="90">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'UP');</task>
+   </button>
+   <button buttontype="push" height="60" left="440" name="DOWN" style="txt-align:center;" top="90" width="90">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'DOWN');</task>
+   </button>
+   <button buttontype="push" height="60" left="540" name="CLEAR CH1 L0" style="txt-align:center;" top="90" width="110">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'CLFB 1:0');</task>
+   </button>
+   <button buttontype="push" height="60" left="660" name="CLEAR CH1 L10" style="txt-align:center;" top="90" width="110">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'CLFB 1:10');</task>
+   </button>
+   <button buttontype="push" height="60" left="780" name="CLEAR CH1 L20" style="txt-align:center;" top="90" width="110">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'CLFB 1:20');</task>
+   </button>
+   <button buttontype="push" height="60" left="900" name="CLEAR CH1 L30" style="txt-align:center;" top="90" width="110">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'CLFB 1:30');</task>
+   </button>
+   <button buttontype="push" height="50" left="20" name="GAME START" style="bg#1d7a3a;txt-align:center;" top="160" width="100">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'TIMER GAME:START');</task>
+   </button>
+   <button buttontype="push" height="50" left="124" name="GAME STOP" style="bg#8a1c1c;txt-align:center;" top="160" width="100">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'TIMER GAME:STOP');</task>
+   </button>
+   <button buttontype="push" height="50" left="228" name="GAME RESET" style="txt-align:center;" top="160" width="100">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'TIMER GAME:RESET');</task>
+   </button>
+   <button buttontype="push" height="50" left="360" name="SHOT START" style="bg#1d7a3a;txt-align:center;" top="160" width="100">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'TIMER SHOT:START');</task>
+   </button>
+   <button buttontype="push" height="50" left="464" name="SHOT STOP" style="bg#8a1c1c;txt-align:center;" top="160" width="100">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'TIMER SHOT:STOP');</task>
+   </button>
+   <button buttontype="push" height="50" left="568" name="SHOT RESET" style="txt-align:center;" top="160" width="100">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'TIMER SHOT:RESET');</task>
+   </button>
+   <button buttontype="push" height="70" left="20" name="1001 Open: LIVE BUG" style="bg#1f3a66;txt-align:center;" top="230" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1001');</task>
+   </button>
+   <button buttontype="push" height="70" left="204" name="OUT" style="txt-align:center;" top="230" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1001');</task>
+   </button>
+   <button buttontype="push" height="70" left="270" name="1002 Story 1: FS BULLETS" style="bg#1f3a66;txt-align:center;" top="230" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1002');</task>
+   </button>
+   <button buttontype="push" height="70" left="454" name="OUT" style="txt-align:center;" top="230" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1002');</task>
+   </button>
+   <button buttontype="push" height="70" left="520" name="1003 Story 2: ELECTION RECAP" style="bg#1f3a66;txt-align:center;" top="230" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1003');</task>
+   </button>
+   <button buttontype="push" height="70" left="704" name="OUT" style="txt-align:center;" top="230" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1003');</task>
+   </button>
+   <button buttontype="push" height="70" left="770" name="1004 Story 2: L3 DECISION" style="bg#1f3a66;txt-align:center;" top="230" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1004');</task>
+   </button>
+   <button buttontype="push" height="70" left="954" name="OUT" style="txt-align:center;" top="230" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1004');</task>
+   </button>
+   <button buttontype="push" height="70" left="20" name="1005 Story 3: L3 WEATHER ALERT" style="bg#1f3a66;txt-align:center;" top="310" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1005');</task>
+   </button>
+   <button buttontype="push" height="70" left="204" name="OUT" style="txt-align:center;" top="310" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1005');</task>
+   </button>
+   <button buttontype="push" height="70" left="270" name="1006 Story 3: FS FORECAST" style="bg#1f3a66;txt-align:center;" top="310" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1006');</task>
+   </button>
+   <button buttontype="push" height="70" left="454" name="OUT" style="txt-align:center;" top="310" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1006');</task>
+   </button>
+   <button buttontype="push" height="70" left="520" name="1007 Story 4: SCORE BUG" style="bg#1f3a66;txt-align:center;" top="310" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1007');</task>
+   </button>
+   <button buttontype="push" height="70" left="704" name="OUT" style="txt-align:center;" top="310" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1007');</task>
+   </button>
+   <button buttontype="push" height="70" left="770" name="1008 Story 4: BIO DELACROIX" style="bg#1f3a66;txt-align:center;" top="310" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1008');</task>
+   </button>
+   <button buttontype="push" height="70" left="954" name="OUT" style="txt-align:center;" top="310" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1008');</task>
+   </button>
+   <button buttontype="push" height="70" left="20" name="1009 Story 4: BIO NAKAMURA" style="bg#1f3a66;txt-align:center;" top="390" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1009');</task>
+   </button>
+   <button buttontype="push" height="70" left="204" name="OUT" style="txt-align:center;" top="390" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1009');</task>
+   </button>
+   <button buttontype="push" height="70" left="270" name="1010 Story 4: BIO #88 (DataLinq)" style="bg#1f3a66;txt-align:center;" top="390" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1010');</task>
+   </button>
+   <button buttontype="push" height="70" left="454" name="OUT" style="txt-align:center;" top="390" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1010');</task>
+   </button>
+   <button buttontype="push" height="70" left="520" name="1011 Open: 3D TITLE" style="bg#1f3a66;txt-align:center;" top="390" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1011');</task>
+   </button>
+   <button buttontype="push" height="70" left="704" name="OUT" style="txt-align:center;" top="390" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1011');</task>
+   </button>
+   <button buttontype="push" height="70" left="770" name="1012 Ticker: HEADLINES" style="bg#1f3a66;txt-align:center;" top="390" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1012');</task>
+   </button>
+   <button buttontype="push" height="70" left="954" name="OUT" style="txt-align:center;" top="390" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1012');</task>
+   </button>
+   <button buttontype="push" height="70" left="20" name="1013 Ch 2: LIVE BUG (second output)" style="bg#1f3a66;txt-align:center;" top="470" width="180">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQI 1013');</task>
+   </button>
+   <button buttontype="push" height="70" left="204" name="OUT" style="txt-align:center;" top="470" width="52">
+      <task tasktype="ogscript">rosstalk.sendMessage(params.getValue('keyline_host', 0), params.getValue('keyline_port', 0), 'SEQO 1013');</task>
+   </button>
+</abs>

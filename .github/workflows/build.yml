@@ -1,0 +1,39 @@
+name: Build desktop apps
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            build: npx electron-builder --win --x64 --publish never
+          - os: macos-latest
+            build: npx electron-builder --mac --x64 --arm64 --publish never
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Package
+        run: ${{ matrix.build }}
+        env:
+          # no Apple Developer ID: the app is ad-hoc signed (identity "-") so it runs on Apple Silicon
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: keyline-cg-studio-${{ runner.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error

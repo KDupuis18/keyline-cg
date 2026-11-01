@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' kl-media: data: blob: https: http: file:; font-src 'self' kl-media: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'sha256-h18PRh6necmYHs5C9lqyLxj7WYKjJH2yc1bJsYKlUkg='; media-src 'self' kl-media: blob: data: file: https:; connect-src 'self' kl-media: https: http:">
+<title>Keyline CG Studio</title>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="engine.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="titlebar"><span class="logo"></span><span id="winTitle">Keyline CG Studio</span><span class="tb-r" id="fmtInfo">Framebuffer 1 · 1920×1080</span></header>
+  <nav class="menubar" id="menubar"></nav>
+  <div class="toolbar">
+    <div class="tg"><button class="tbtn mode" id="mLayout">Layout<kbd>F3</kbd></button><button class="tbtn mode" id="mSeq">Sequence<kbd>F4</kbd></button></div>
+    <div class="tg"><button class="tbtn" data-act="save" title="Save project (Ctrl/Cmd+S)">Save</button><button class="tbtn" data-act="undo" title="Undo (Ctrl/Cmd+Z)">Undo</button><button class="tbtn" data-act="redo" title="Redo (Ctrl/Cmd+Y)">Redo</button></div>
+    <div class="tg"><button class="tbtn tog" id="bSafe" data-act="toggleSafe">Safe areas</button><button class="tbtn tog" id="bPlate" data-act="togglePlate">Camera plate</button></div>
+    <div class="tg"><button class="tbtn" data-act="dataLinq" title="Live data sources">DataLinq</button><button class="tbtn" data-act="timers" title="Countdown and game clocks">Clocks</button><button class="tbtn ndi" id="bNdi" data-act="toggleNdi" title="Start or stop NDI output">NDI off</button><button class="tbtn" data-act="outputSettings" title="NDI, fullscreen output, RossTalk and DashBoard">Output &amp; Control</button></div>
+    <div class="tg"><label for="takeEntry" class="tl">Take ID</label><input id="takeEntry" class="in tid" inputmode="numeric" placeholder="1001" autocomplete="off"></div>
+    <div class="tg grow"></div>
+    <div class="tg"><button class="tbtn take" data-act="take" title="Take selected item to air (Space in Sequence mode)">TAKE</button><button class="tbtn clr" data-act="clearAll" title="Clear all layers (Esc in Sequence mode)">CLEAR ALL</button></div>
+  </div>
+
+  <main id="layoutMode" class="main">
+    <div class="col" style="grid-area:left">
+      <section class="panel" style="flex:none"><div class="ph">Project Manager</div><div class="pb cats" id="catsL"></div></section>
+      <section class="panel" style="flex:1"><div class="ph">Scene Manager<span class="sp"></span><button class="mini" data-act="newScene">+ New scene</button></div><div class="pb scenes" id="scenesL"></div></section>
+    </div>
+    <section class="panel" style="grid-area:view"><div class="ph"><span id="vpTitle">Main Viewport</span><span class="sp"></span><span class="hint">Drag to move · corner handles resize · Shift snaps 10px</span></div><div class="mon vp" id="vpWrap"><div class="stage" id="vpStage"></div></div></section>
+    <div class="col" style="grid-area:right">
+      <section class="panel" style="flex:1"><div class="ph"><span id="inspTitle">Object Inspector</span></div><div class="tabs" id="inspTabs"></div><div class="pb pad" id="inspBody"></div></section>
+      <section class="panel" style="flex:none"><div class="ph">Object Library</div><div class="lib" id="lib"></div><div class="ph sub">Material Manager</div><div class="sw" id="swatches"></div><div class="ph sub">Styles</div><div class="styles" id="styleList"></div></section>
+    </div>
+    <section class="panel" style="grid-area:tl" id="tlPanel">
+      <div class="tlbar" id="tlBar">
+        <div class="tg"><button class="mini" data-act="tlHome" title="First frame (Home)">|◀</button><button class="mini" data-act="tlPrev" title="Previous frame ( , )">◀</button><button class="mini wide" data-act="tlPlay" id="tlPlay" title="Play / stop (Space)">▶ Play</button><button class="mini" data-act="tlNext" title="Next frame ( . )">▶</button><button class="mini" data-act="tlEnd" title="Last frame (End)">▶|</button></div>
+        <div class="tg"><button class="mini" data-act="tlPlayIn" title="Play frame 0 to the pause point">Play in</button><button class="mini" data-act="tlPlayOut" title="Play the pause point to the end">Play out</button><label class="chk"><input type="checkbox" id="tlLoop">Loop</label></div>
+        <div class="tg"><label class="tl" for="tlFrame">Frame</label><input id="tlFrame" class="in fr" type="number" min="0" value="0"><span class="tc" id="tlTc">00:00</span></div>
+        <div class="tg"><button class="mini rec" id="tlAuto" data-act="tlAuto" title="Auto-key: any change writes a keyframe at the current frame">● Auto-key</button><button class="mini" data-act="tlKey" title="Key position, size, alpha, scale and rotation of the selected object (K)">◆ Key</button><button class="mini" data-act="tlDelKeys" title="Delete selected keyframes (Delete)">Delete keys</button><select class="in" id="tlEase" title="Easing of the selected keyframes"></select></div>
+        <div class="tg"><button class="mini" data-act="tlSetPause" title="Set the pause point to the current frame">Pause here</button><button class="mini" data-act="tlSetEnd" title="Set the scene end to the current frame">End here</button></div>
+        <div class="tg grow"></div>
+        <div class="tg"><label class="tl" for="tlZoom">Zoom</label><input id="tlZoom" type="range" min="2" max="24" value="8"></div>
+        <div class="tg"><button class="mini" data-act="objUp" title="Bring forward">▲</button><button class="mini" data-act="objDown" title="Send backward">▼</button><button class="mini" data-act="objDup">Duplicate</button><button class="mini danger" data-act="objDel">Delete</button></div>
+      </div>
+      <div class="tlbody" id="tlBody"></div>
+    </section>
+  </main>
+
+  <main id="seqMode" class="main" hidden>
+    <div class="col" style="grid-area:left">
+      <section class="panel" style="flex:none"><div class="ph">Project Manager</div><div class="pb cats" id="catsS"></div></section>
+      <section class="panel" style="flex:1"><div class="ph">Scene Manager<span class="sp"></span><span class="hint">+ adds a take</span></div><div class="pb scenes" id="scenesS"></div></section>
+    </div>
+    <section class="panel" style="grid-area:run"><div class="ph">Sequencer · Rundown<span class="sp"></span><button class="mini" data-act="takeUp">▲ Up</button><button class="mini" data-act="takeDown">▼ Down</button><button class="mini" data-act="takeDup">Duplicate</button><button class="mini danger" data-act="takeDel">Delete</button></div><div class="pb"><table class="grid rd" id="rundown"></table></div></section>
+    <section class="panel" style="grid-area:insp"><div class="ph">Take Inspector · <span id="tiTitle"></span></div><div class="tabs" id="tiTabs"></div><div class="pb pad" id="tiBody"></div></section>
+    <section class="panel" style="grid-area:prev"><div class="ph"><span class="tally g"></span><span id="pvwTitle">Preview</span><span class="sp"></span><button class="mini" data-act="playPvw">▶ Play</button></div><div class="mon" id="pvwWrap"><div class="stage" id="pvwStage"></div></div><div class="next" id="nextStrip"></div></section>
+    <section class="panel" style="grid-area:prog"><div class="ph"><span class="tally r" id="pgmTally"></span>Program<span class="chtabs"><button class="mini" data-ch="1" id="pgmCh1">CH 1</button><button class="mini" data-ch="2" id="pgmCh2">CH 2</button></span><span class="sp"></span><button class="mini" data-act="clearSel" title="Clear the selected take's layer">Clear layer</button></div><div class="mon" id="pgmWrap"><div class="stage" id="pgmStage"><div class="plate" id="pgmPlate"></div><div id="pgmLayers1" class="layer"></div><div id="pgmLayers2" class="layer" hidden></div></div></div><div class="onair" id="onairList"></div></section>
+  </main>
+
+  <footer class="statusbar"><span id="stMsg">Ready</span><span class="sp"></span><span class="m" id="stDl"></span><span class="m" id="stCtl"></span><span class="m" id="stNdi"></span><span class="m" id="stAir">0 layers on air</span><span class="m" id="stFps">— fps</span><span class="m" id="stClock"></span></footer>
+</div>
+<div id="menuPop" hidden></div>
+<div id="modal" hidden></div>
+<script type="importmap">{"imports":{"three":"../../node_modules/three/build/three.module.js"}}</script>
+<script src="../../node_modules/jszip/dist/jszip.min.js"></script>
+<script src="engine.js"></script>
+<script src="datalinq.js"></script>
+<script src="gtimport.js"></script>
+<script src="app.js"></script>
+<script type="module" src="three3d.mjs"></script>
+</body>
+</html>

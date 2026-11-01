@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' kl-media: data: blob: https: http: file:; font-src 'self' kl-media: data:; connect-src 'self' kl-media:; style-src 'self' 'unsafe-inline'; script-src 'self' 'sha256-h18PRh6necmYHs5C9lqyLxj7WYKjJH2yc1bJsYKlUkg='; media-src 'self' kl-media: blob: data: file: https:">
+<title>Keyline Output</title>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="engine.css">
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:transparent}
+body.black{background:#000}
+#wrap{position:absolute;inset:0}
+#tag{position:absolute;left:12px;top:10px;font:600 12px Consolas,monospace;color:rgba(255,255,255,.6);display:none}
+body.black #tag{display:block}
+body.key #layers{filter:brightness(0) invert(1)}
+</style>
+</head>
+<body>
+<div id="wrap"><div class="stage" id="stage"><div id="layers" class="layer"></div></div></div>
+<div id="tag"></div>
+<script type="importmap">{"imports":{"three":"../../node_modules/three/build/three.module.js"}}</script>
+<script src="engine.js"></script>
+<script src="output.js"></script>
+<script type="module" src="three3d.mjs"></script>
+</body>
+</html>

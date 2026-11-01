@@ -1,0 +1,4 @@
+{ "league": "Metro", "data": { "games": [
+  { "home": { "name": "Ridgeline", "score": 104 }, "away": { "name": "Harbor City", "score": 98 }, "status": "Final" },
+  { "home": { "name": "Lakewood", "score": 77 }, "away": { "name": "Boise", "score": 81 }, "status": "Q4 2:31" }
+] } }

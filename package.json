@@ -1,0 +1,124 @@
+{
+  "name": "keyline-cg-studio",
+  "productName": "Keyline CG Studio",
+  "version": "3.0.0",
+  "description": "Broadcast character generator with keyframe animation, NDI output, DataLinq and RossTalk control",
+  "main": "src/main.js",
+  "author": "Keyline",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run-tests.js",
+    "test:e2e": "xvfb-run -a node test/e2e.js && xvfb-run -a node test/e2e-v3.js",
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac --x64 --arm64"
+  },
+  "dependencies": {
+    "@fontsource/anton": "^5.1.0",
+    "@fontsource/archivo-narrow": "^5.1.0",
+    "@fontsource/barlow-condensed": "^5.1.0",
+    "@fontsource/bebas-neue": "^5.1.0",
+    "@fontsource/oswald": "^5.1.0",
+    "@fontsource/roboto-condensed": "^5.1.0",
+    "@fontsource/teko": "^5.1.0",
+    "jszip": "^3.10.1",
+    "koffi": "^2.9.0",
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.6",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "studio.keyline.cg",
+    "productName": "Keyline CG Studio",
+    "copyright": "Keyline CG Studio",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!**/*.map",
+      "!**/test/**"
+    ],
+    "asarUnpack": [
+      "**/node_modules/koffi/**",
+      "src/ndi-worker.js",
+      "src/ndi.js"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "klcg",
+        "name": "Keyline Project",
+        "role": "Editor"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "files": [
+        "!**/node_modules/koffi/build/koffi/{darwin,linux,freebsd,openbsd,musl}_*/**",
+        "!**/node_modules/koffi/build/koffi/win32_{i386,arm64}/**"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Keyline-CG-Studio-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Keyline-CG-Studio-Portable-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.video",
+      "icon": "build/icon.png",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "artifactName": "Keyline-CG-Studio-${version}-${arch}.${ext}",
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "Keyline sends NDI video and receives RossTalk commands on your local network.",
+        "NSBonjourServices": [
+          "_ndi._tcp"
+        ]
+      },
+      "files": [
+        "!**/node_modules/koffi/build/koffi/{win32,linux,freebsd,openbsd,musl}_*/**"
+      ]
+    },
+    "dmg": {
+      "artifactName": "Keyline-CG-Studio-${version}-${arch}.${ext}"
+    }
+  }
+}
