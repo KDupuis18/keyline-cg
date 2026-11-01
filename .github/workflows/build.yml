@@ -29,6 +29,8 @@ jobs:
         env:
           # no Apple Developer ID: the app is ad-hoc signed (identity "-") so it runs on Apple Silicon
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          # copy instead of hard-linking files into the bundle (avoids EEXIST on macOS runners)
+          USE_HARD_LINKS: false
       - uses: actions/upload-artifact@v4
         with:
           name: keyline-cg-studio-${{ runner.os }}

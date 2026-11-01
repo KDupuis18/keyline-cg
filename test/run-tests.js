@@ -70,7 +70,7 @@ async function test(name, fn) {
     assert.strictEqual((await get('/nope')).status, 404);
   });
   await test('port conflict is reported, not thrown', async () => {
-    const blocker = net.createServer().listen(17790);
+    const blocker = net.createServer(); await new Promise(r => blocker.listen(17790, '0.0.0.0', r)); // same address family as Keyline, so every OS reports the conflict
     const c2 = createControl({ onCommand: () => ({}) });
     const s2 = await c2.configure({ enabled: true, rosstalkPort: 17790, httpPort: 0 });
     assert.strictEqual(s2.rosstalk, null); assert.match(s2.errors[0], /17790/);
@@ -80,6 +80,7 @@ async function test(name, fn) {
 
   console.log('NDI binding (fake libndi with the SDK struct layout)');
   const fakeLib = path.join(__dirname, 'fake-ndi', 'libfakendi.so');
+  if (process.platform !== 'linux') { console.log('  – skipped: the fake NDI runtime is a Linux shared library (real NDI is exercised by the app on this OS)'); console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0); }
   if (!fs.existsSync(fakeLib)) {
     try { require('child_process').execFileSync('gcc', ['-shared', '-fPIC', '-O2', '-o', fakeLib, path.join(__dirname, 'fake-ndi', 'fakendi.c')]); }
     catch (e) { console.log('  – skipped: needs gcc on Linux to build the fake NDI library'); console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0); }

@@ -1,0 +1,16 @@
+/* Keep only this platform's koffi binaries in the packaged app (koffi ships builds for every OS). */
+'use strict';
+const fs = require('fs');
+const path = require('path');
+exports.default = async function afterPack(ctx) {
+  const os = ctx.electronPlatformName; // 'darwin' | 'win32' | 'linux'
+  const keepDirs = { darwin: ['darwin_x64', 'darwin_arm64'], win32: ['win32_x64', 'win32_arm64'], linux: ['linux_x64', 'linux_arm64'] }[os] || [];
+  const resources = ctx.electronPlatformName === 'darwin'
+    ? path.join(ctx.appOutDir, `${ctx.packager.appInfo.productFilename}.app`, 'Contents', 'Resources')
+    : path.join(ctx.appOutDir, 'resources');
+  const dir = path.join(resources, 'app.asar.unpacked', 'node_modules', 'koffi', 'build', 'koffi');
+  if (!fs.existsSync(dir)) return;
+  for (const d of fs.readdirSync(dir)) {
+    if (!keepDirs.includes(d)) fs.rmSync(path.join(dir, d), { recursive: true, force: true });
+  }
+};

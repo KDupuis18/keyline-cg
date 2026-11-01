@@ -46,8 +46,7 @@
     ],
     "asarUnpack": [
       "**/node_modules/koffi/**",
-      "src/ndi-worker.js",
-      "src/ndi.js"
+      "src/ndi*.js"
     ],
     "fileAssociations": [
       {
@@ -71,11 +70,7 @@
           ]
         }
       ],
-      "icon": "build/icon.png",
-      "files": [
-        "!**/node_modules/koffi/build/koffi/{darwin,linux,freebsd,openbsd,musl}_*/**",
-        "!**/node_modules/koffi/build/koffi/win32_{i386,arm64}/**"
-      ]
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -112,13 +107,11 @@
         "NSBonjourServices": [
           "_ndi._tcp"
         ]
-      },
-      "files": [
-        "!**/node_modules/koffi/build/koffi/{win32,linux,freebsd,openbsd,musl}_*/**"
-      ]
+      }
     },
     "dmg": {
       "artifactName": "Keyline-CG-Studio-${version}-${arch}.${ext}"
-    }
+    },
+    "afterPack": "build/afterPack.js"
   }
 }
