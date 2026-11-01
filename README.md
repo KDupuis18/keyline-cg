@@ -28,7 +28,7 @@ It also includes:
 xattr -cr "/Applications/Keyline CG Studio.app" && codesign --force --deep --sign - "/Applications/Keyline CG Studio.app"
 ```
 
-CI builds are already ad-hoc signed. For those, right-click › **Open**. Allow **Local Network** access when asked (NDI and RossTalk need it).
+Installers built by GitHub Actions are ad-hoc signed, so you skip that command: open the `.dmg`, drag the app to Applications, then right-click › **Open** the first time (or **System Settings › Privacy & Security › Open Anyway**). Allow **Local Network** access when asked (NDI and RossTalk need it).
 
 **NDI** needs the free **NDI Tools** from ndi.video, which includes the runtime.
 

@@ -99,7 +99,7 @@
       ],
       "category": "public.app-category.video",
       "icon": "build/icon.png",
-      "identity": "-",
+      "identity": null,
       "hardenedRuntime": false,
       "artifactName": "Keyline-CG-Studio-${version}-${arch}.${ext}",
       "extendInfo": {
