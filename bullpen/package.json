@@ -1,0 +1,17 @@
+{
+  "name": "bullpen-cg",
+  "version": "1.0.0",
+  "description": "Baseball broadcast graphics: live scoring console, auto-updating scorebug and stat graphics, browser-source outputs",
+  "main": "server.js",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/engine.test.js",
+    "test:e2e": "node test/e2e.js"
+  },
+  "dependencies": {
+    "@fontsource/barlow-condensed": "^5.1.0"
+  },
+  "engines": { "node": ">=18" }
+}
