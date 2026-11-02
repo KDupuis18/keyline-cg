@@ -1,7 +1,11 @@
-/* Bullpen CG game engine. All state lives in one plain JSON object so it can be
-   saved, broadcast to every page over SSE, and restored by undo. */
+/* Keyline baseball scoring engine. The whole game is one plain JSON object
+   (project.baseball) so it saves with the project and undo can snapshot it.
+   Graphics are ordinary Keyline scenes linked to the live Baseball data source. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./shared.js'));
+  else root.BBEngine = factory(root.BP);
+})(typeof self !== 'undefined' ? self : this, function (S) {
 'use strict';
-const S = require('../public/shared.js');
 
 /* ---------- sample teams (fictional) ---------- */
 function hitter([num, first, last, pos, bats, avg, hr, rbi, ops, obp, slg, sb]) {
@@ -63,22 +67,17 @@ function freshGame() {
   return {
     inning: 1, half: 'top', balls: 0, strikes: 0, outs: 0, bases: [false, false, false],
     runs: { away: [0], home: [0] }, hits: { away: 0, home: 0 }, errors: { away: 0, home: 0 },
-    final: false, transition: false, lastPlay: ''
+    final: false, transition: false, lastPlay: '', pa: 0, pitchMph: '', pitchType: ''
   };
 }
-function freshGfx() {
-  return {
-    bug: true, lower: null, full: null, flash: null, preview: null,
-    ticker: { on: false, label: 'AROUND THE LEAGUE', items: 'Ridgeview 4, Harbor City 2 — Final\nRain delay in Westport, 7:05 start pushed back\nOduya: 31 HR, 2nd in the league' },
-    auto: { batter: false, secs: 7 }
-  };
+function freshAuto() {
+  return { batterTake: '', batterSecs: 7, pitchTake: '', pitchSecs: 6 };
 }
 function newState() {
   return {
     v: 1,
-    meta: { title: 'Gulls at Foxes', venue: 'Ridgeview Park' },
-    theme: { accent: '#f3b61f', panel: '#0d1520', bugPos: 'tl', scale: 100 },
-    teams: sampleTeams(), game: freshGame(), today: {}, pit: {}, gfx: freshGfx()
+    meta: { title: 'Gulls at Foxes', venue: 'Ridgeview Park', accent: '#f3b61f' },
+    teams: sampleTeams(), game: freshGame(), today: {}, pit: {}, auto: freshAuto()
   };
 }
 
@@ -178,15 +177,10 @@ function plateResult(st, kind, opts = {}) {
   g.lastPlay = (slot ? S.fullName(S.playerById(team, slot.id)) + ': ' : '') + LABEL[kind] + (runs ? ' — ' + runs + (runs > 1 ? ' runs score' : ' run scores') : '');
   resetCount(g);
   if (team.lineup.length) team.up = (team.up + 1) % team.lineup.length;
+  g.pa = (g.pa || 0) + 1; // the console watches this to fire the auto batter graphic
+  g.pitchMph = ''; g.pitchType = '';
   if (g.outs >= 3) endHalf(st);
-  else if (st.gfx.auto.batter) autoBatter(st);
   return { runs, outs };
-}
-
-function autoBatter(st) {
-  const cb = S.currentBatter(st);
-  if (!cb.player) return;
-  st.gfx.lower = { type: 'batter', slot: 'lower', player: cb.player.id, id: S.uid(), secs: Number(st.gfx.auto.secs) || 0, auto: true };
 }
 
 function pitch(st, kind) {
@@ -209,27 +203,11 @@ function pitch(st, kind) {
   }
 }
 
-/* ---------- graphics ---------- */
-const SLOT_OF = {
-  batter: 'lower', pitcher: 'lower', matchup: 'lower', dueup: 'lower', linescore: 'lower', lt: 'lower', pitchcount: 'lower',
-  lineup: 'full', scoreboard: 'full', flash: 'flash', pitchspeed: 'flash'
-};
-function gfxSpec(st, a) {
-  const spec = Object.assign({}, a.gfx || {});
-  if (!SLOT_OF[spec.type]) throw new Error('Unknown graphic: ' + spec.type);
-  // pin the player so a graphic on air doesn't change when the next batter comes up
-  if (!spec.player && spec.type === 'batter') { const b = S.currentBatter(st).player; if (b) spec.player = b.id; }
-  if (!spec.player && (spec.type === 'pitcher' || spec.type === 'pitchcount')) { const p = S.currentPitcher(st, spec.team).player; if (p) spec.player = p.id; }
-  spec.slot = SLOT_OF[spec.type];
-  spec.id = S.uid();
-  return spec;
-}
-
 /* ---------- actions ---------- */
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const GAME_ACTIONS = new Set(['pitch', 'result', 'count', 'outs', 'base', 'runs', 'hits', 'errors', 'runnerOut', 'batter', 'endHalf', 'inning', 'final', 'pitcher', 'lineup', 'team', 'player', 'addPlayer', 'removePlayer', 'roster', 'resetGame', 'meta']);
+const GAME_ACTIONS = new Set(['pitch', 'result', 'count', 'outs', 'base', 'runs', 'hits', 'errors', 'runnerOut', 'batter', 'endHalf', 'inning', 'final', 'pitcher', 'lineup', 'team', 'player', 'addPlayer', 'removePlayer', 'roster', 'resetGame', 'meta', 'pitchInfo']);
 
-/* Mutates st. Returns true when the action changed game data (so the server keeps an undo snapshot). */
+/* Mutates st. Returns true when the action changed game data (so the console keeps an undo snapshot). */
 function apply(st, a) {
   const g = st.game, side = k => { if (k !== 'away' && k !== 'home') throw new Error('team must be "away" or "home"'); return k; };
   switch (a.type) {
@@ -332,32 +310,15 @@ function apply(st, a) {
       st.teams.away.up = 0; st.teams.home.up = 0;
       break;
 
-    /* graphics (not part of undo history) */
-    case 'preview': st.gfx.preview = a.gfx ? gfxSpec(st, a) : null; break;
-    case 'take': {
-      const spec = a.gfx ? gfxSpec(st, a) : st.gfx.preview;
-      if (!spec) throw new Error('Nothing in preview to take');
-      st.gfx[spec.slot] = Object.assign({}, spec, { id: S.uid() });
-      if (!a.gfx) st.gfx.preview = null;
-      break;
-    }
-    case 'clear':
-      if (a.slot === 'all') { st.gfx.lower = st.gfx.full = st.gfx.flash = null; }
-      else if (['lower', 'full', 'flash'].includes(a.slot)) st.gfx[a.slot] = null;
-      else throw new Error('slot must be lower, full, flash or all');
-      break;
-    case 'bug': st.gfx.bug = a.value != null ? !!a.value : !st.gfx.bug; break;
-    case 'ticker':
-      for (const f of ['label', 'items']) if (a[f] != null) st.gfx.ticker[f] = String(a[f]);
-      if (a.on != null) st.gfx.ticker.on = !!a.on;
-      if (a.toggle) st.gfx.ticker.on = !st.gfx.ticker.on;
+    case 'pitchInfo': // speed / type of the last pitch, for a pitch-speed graphic
+      if (a.mph != null) g.pitchMph = String(a.mph);
+      if (a.pitch != null) g.pitchType = String(a.pitch);
       break;
     case 'auto':
-      if (a.batter != null) st.gfx.auto.batter = !!a.batter;
-      if (a.secs != null) st.gfx.auto.secs = clamp(+a.secs || 0, 0, 120);
-      break;
-    case 'theme':
-      for (const f of ['accent', 'panel', 'bugPos', 'scale']) if (a.fields && a.fields[f] != null) st.theme[f] = a.fields[f];
+      if (a.batterTake != null) st.auto.batterTake = String(a.batterTake);
+      if (a.batterSecs != null) st.auto.batterSecs = clamp(+a.batterSecs || 0, 0, 120);
+      if (a.pitchTake != null) st.auto.pitchTake = String(a.pitchTake);
+      if (a.pitchSecs != null) st.auto.pitchSecs = clamp(+a.pitchSecs || 0, 0, 120);
       break;
     default: throw new Error('Unknown action: ' + a.type);
   }
@@ -369,11 +330,9 @@ function normalize(st) {
   const d = newState();
   st = Object.assign({}, d, st);
   st.meta = Object.assign({}, d.meta, st.meta);
-  st.theme = Object.assign({}, d.theme, st.theme);
   st.game = Object.assign(freshGame(), st.game);
-  st.gfx = Object.assign(freshGfx(), st.gfx, { preview: null });
-  st.gfx.ticker = Object.assign(freshGfx().ticker, st.gfx.ticker);
-  st.gfx.auto = Object.assign(freshGfx().auto, st.gfx.auto);
+  st.auto = Object.assign(freshAuto(), st.auto);
+  delete st.gfx; delete st.theme;
   for (const k of ['away', 'home']) {
     const t = st.teams[k] = Object.assign({ name: k, city: '', abbr: k.slice(0, 3).toUpperCase(), color: '#333333', color2: '#ffffff', logo: '', record: '', roster: [], lineup: [], pitcher: '', up: 0 }, st.teams[k]);
     if (t.up >= t.lineup.length) t.up = 0;
@@ -383,4 +342,5 @@ function normalize(st) {
   return st;
 }
 
-module.exports = { newState, normalize, apply, sampleTeams, advance, force, SLOT_OF, LABEL };
+return { newState, normalize, apply, sampleTeams, advance, force, LABEL, GAME_ACTIONS };
+});

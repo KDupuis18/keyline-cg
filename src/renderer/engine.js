@@ -190,6 +190,7 @@
     d.className = 'go go-' + ({ image: 'img', clock: 'text', video: 'img' }[o.type] || o.type);
     d.dataset.id = o.id;
     d._p = p;
+    if (p.hide) d.style.visibility = 'hidden'; // a DataLinq "show when" link switched this object off
     const sh = shadowCss(p);
     if (sh) d.style.filter = sh;
     if (o.type === 'rect') {

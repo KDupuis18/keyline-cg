@@ -7,13 +7,14 @@
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="engine.css">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="baseball/baseball.css">
 </head>
 <body>
 <div id="app">
   <header class="titlebar"><span class="logo"></span><span id="winTitle">Keyline CG Studio</span><span class="tb-r" id="fmtInfo">Framebuffer 1 · 1920×1080</span></header>
   <nav class="menubar" id="menubar"></nav>
   <div class="toolbar">
-    <div class="tg"><button class="tbtn mode" id="mLayout">Layout<kbd>F3</kbd></button><button class="tbtn mode" id="mSeq">Sequence<kbd>F4</kbd></button></div>
+    <div class="tg"><button class="tbtn mode" id="mLayout">Layout<kbd>F3</kbd></button><button class="tbtn mode" id="mSeq">Sequence<kbd>F4</kbd></button><button class="tbtn mode" id="mBb" title="Score the game; linked graphics update live">Baseball<kbd>F5</kbd></button></div>
     <div class="tg"><button class="tbtn" data-act="save" title="Save project (Ctrl/Cmd+S)">Save</button><button class="tbtn" data-act="undo" title="Undo (Ctrl/Cmd+Z)">Undo</button><button class="tbtn" data-act="redo" title="Redo (Ctrl/Cmd+Y)">Redo</button></div>
     <div class="tg"><button class="tbtn tog" id="bSafe" data-act="toggleSafe">Safe areas</button><button class="tbtn tog" id="bPlate" data-act="togglePlate">Camera plate</button></div>
     <div class="tg"><button class="tbtn" data-act="dataLinq" title="Live data sources">DataLinq</button><button class="tbtn" data-act="timers" title="Countdown and game clocks">Clocks</button><button class="tbtn ndi" id="bNdi" data-act="toggleNdi" title="Start or stop NDI output">NDI off</button><button class="tbtn" data-act="outputSettings" title="NDI, fullscreen output, RossTalk and DashBoard">Output &amp; Control</button></div>
@@ -58,6 +59,8 @@
     <section class="panel" style="grid-area:prog"><div class="ph"><span class="tally r" id="pgmTally"></span>Program<span class="chtabs"><button class="mini" data-ch="1" id="pgmCh1">CH 1</button><button class="mini" data-ch="2" id="pgmCh2">CH 2</button></span><span class="sp"></span><button class="mini" data-act="clearSel" title="Clear the selected take's layer">Clear layer</button></div><div class="mon" id="pgmWrap"><div class="stage" id="pgmStage"><div class="plate" id="pgmPlate"></div><div id="pgmLayers1" class="layer"></div><div id="pgmLayers2" class="layer" hidden></div></div></div><div class="onair" id="onairList"></div></section>
   </main>
 
+  <main id="bbMode" class="main" hidden></main>
+
   <footer class="statusbar"><span id="stMsg">Ready</span><span class="sp"></span><span class="m" id="stDl"></span><span class="m" id="stCtl"></span><span class="m" id="stNdi"></span><span class="m" id="stAir">0 layers on air</span><span class="m" id="stFps">— fps</span><span class="m" id="stClock"></span></footer>
 </div>
 <div id="menuPop" hidden></div>
@@ -67,6 +70,11 @@
 <script src="engine.js"></script>
 <script src="datalinq.js"></script>
 <script src="gtimport.js"></script>
+<script src="baseball/shared.js"></script>
+<script src="baseball/engine.js"></script>
+<script src="baseball/fields.js"></script>
+<script src="baseball/starter.js"></script>
+<script src="baseball/console.js"></script>
 <script src="app.js"></script>
 <script type="module" src="three3d.mjs"></script>
 </body>

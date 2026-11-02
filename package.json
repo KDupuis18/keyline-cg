@@ -2,14 +2,14 @@
   "name": "keyline-cg-studio",
   "productName": "Keyline CG Studio",
   "version": "3.0.0",
-  "description": "Broadcast character generator with keyframe animation, NDI output, DataLinq and RossTalk control",
+  "description": "Broadcast character generator with keyframe animation, NDI output, DataLinq, RossTalk control and live baseball scoring",
   "main": "src/main.js",
   "author": "Keyline",
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
-    "test": "node test/run-tests.js",
-    "test:e2e": "xvfb-run -a node test/e2e.js && xvfb-run -a node test/e2e-v3.js",
+    "test": "node test/run-tests.js && node test/baseball.test.js",
+    "test:e2e": "xvfb-run -a node test/e2e.js && xvfb-run -a node test/e2e-v3.js && xvfb-run -a node test/e2e-baseball.js",
     "dist:win": "electron-builder --win --x64",
     "dist:mac": "electron-builder --mac --x64 --arm64"
   },

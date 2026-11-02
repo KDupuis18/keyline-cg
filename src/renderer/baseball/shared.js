@@ -108,9 +108,9 @@
 
   /* Roster CSV with a header row. Recognised columns (any order, any case):
      num/#/no, first, last, name (split into first/last), pos, bats, throws,
-     avg, hr, rbi, obp, slg, ops, sb, w, l, era, ip, so/k, bb, whip, sv */
-  const ALIAS = { '#': 'num', no: 'num', number: 'num', jersey: 'num', position: 'pos', k: 'so', firstname: 'first', lastname: 'last', 'first name': 'first', 'last name': 'last', player: 'name' };
-  const FIELDS = ['num', 'first', 'last', 'name', 'pos', 'bats', 'throws', 'avg', 'hr', 'rbi', 'obp', 'slg', 'ops', 'sb', 'w', 'l', 'era', 'ip', 'so', 'bb', 'whip', 'sv'];
+     avg, hr, rbi, obp, slg, ops, sb, w, l, era, ip, so/k, bb, whip, sv, photo/headshot */
+  const ALIAS = { '#': 'num', no: 'num', number: 'num', jersey: 'num', position: 'pos', k: 'so', firstname: 'first', lastname: 'last', 'first name': 'first', 'last name': 'last', player: 'name', headshot: 'photo', image: 'photo' };
+  const FIELDS = ['num', 'first', 'last', 'name', 'pos', 'bats', 'throws', 'avg', 'hr', 'rbi', 'obp', 'slg', 'ops', 'sb', 'w', 'l', 'era', 'ip', 'so', 'bb', 'whip', 'sv', 'photo'];
   function rosterFromCSV(text) {
     const rows = parseCSV(text);
     if (rows.length < 2) throw new Error('The CSV needs a header row and at least one player.');

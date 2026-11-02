@@ -12,6 +12,7 @@ It also includes:
 - **Custom fonts.**
 - **DataLinq** live data from Google Sheets, CSV, JSON APIs or Excel, with formatting and color rules.
 - **RossTalk / HTTP control** for Ross DashBoard and automation.
+- **Baseball mode:** score the game pitch by pitch. Any graphic you design can link to the live score, count, runners, batter and pitcher.
 - **vMix title import.**
 
 ## Install
@@ -57,6 +58,38 @@ Installers built by GitHub Actions are ad-hoc signed, so you skip that command: 
 - **Program monitor:** tabs CH 1 / CH 2 (keys `1`/`2`). On-air chips show every channel and layer.
 - **Next strip:** under Preview, shows the take that will go next.
 - **Template Data:** published fields per take. **DL** links a field to live data.
+
+### Baseball (F5): score the game, graphics follow
+The game is saved inside the project. Every pitch and play updates the built-in **Baseball (live game)** DataLinq source right away, so linked takes change on air without being re-taken.
+
+**Scoring (Game tab):**
+- **Pitches:** Ball, called strike, swinging strike, foul. Fouls with two strikes don't add a strike. Ball four and strike three are recorded automatically.
+- **Results:** 1B, 2B, 3B, HR, out, K, DP, SAC, BB, IBB, HBP, E, FC and runner out. Runners move by the usual defaults. Click a base, or use the run / hit / error buttons, for anything unusual.
+- **Innings:** three outs ends the half-inning. The inning reads `MID 3` / `END 3` until the next pitch.
+- **Tracked for the game:** the linescore by inning, each batter's line (`2-for-3, HR, 2 RBI`), and each pitcher's line and pitch count.
+- **Keyboard:** `B` `S` `W` `F` for pitches. `1` `2` `3` `H` `O` `K` `D` for results.
+- **Undo play:** Ctrl/Cmd+Z in this mode undoes scoring only. In Layout and Sequence it undoes design changes only, and never rewinds the game.
+- **Graphics:** the Graphics list takes and clears rundown takes. The Program monitor is the same one Sequence mode uses.
+
+**Teams & rosters:**
+- City, name, abbreviation, record, colors and logo for each team.
+- Inline roster editing and the batting order.
+- **Import CSV:** columns in any order: `num, first, last` (or `name`), `pos, bats, throws, avg, hr, rbi, ops, w, l, era, so, whip, photo`.
+
+**Graphics setup & fields:**
+- **Starter baseball graphics:** a scorebug, batter and pitcher lower thirds, due up, linescore, pitch speed, and both starting lineups. They're ordinary scenes, so redesign them freely in Layout mode.
+- **Automatic graphics:** a take that fires for each new batter, and one for pitch speed (the **SHOW** button). Each can clear itself after N seconds.
+- **Field reference:** every live field with its current value.
+
+**Linking your own designs:** in Sequence › Template Data, press **DL** on a published object, choose **Baseball (live game)**, and type a field name. Some examples:
+- Text: `bat.name`, `bat.today`, `pit.pc`, `count`, `inning.label`, `away.runs`, `home.inn7`, `due1.last`, `away.lu3.short`.
+- Image: `bases.img` (runner diamond), `outs.img` (out lights), `away.logo`, `bat.photo`.
+- Quad: `away.color` or any team color. A linked quad takes the color as its fill.
+- On/off: set a link to **Show only when set** (or **Show only when empty**) to switch an object on or off, for example a runner light linked to `base1`, or a bat arrow linked to `away.batting`.
+
+**Control:**
+- **RossTalk:** `BB pitch kind=ball`, `BB result kind=hr`, `BB runs team=home delta=1`, `BB undo`.
+- **HTTP:** `/api/baseball/pitch?kind=ball`, `/api/baseball/result?kind=1b`, `/api/baseball/undo`. `/api/baseball/state` returns every live field as JSON.
 
 ### Clocks & timers
 **Clocks** button. Make named timers (GAME, SHOT, …) that count down or up:
@@ -139,7 +172,8 @@ npm run test:e2e
 ```
 
 - `npm test` runs unit tests: DataLinq, RossTalk/HTTP, and the NDI FFI against a fake libndi.
-- `npm run test:e2e` drives the full app on Linux with Xvfb: 47 scenarios covering 3D text, timers, channels, NDI fill+key, media, Excel/JSON, and undo.
+- `npm test` also runs the baseball scoring engine and live-field tests.
+- `npm run test:e2e` drives the full app on Linux with Xvfb: 47 scenarios covering 3D text, timers, channels, NDI fill+key, media, Excel/JSON, and undo, plus 21 Baseball mode scenarios (scoring, live-linked graphics, automatic takes, undo separation, RossTalk/HTTP).
 
 ```bash
 npm run dist:win
@@ -161,5 +195,9 @@ Key files:
 - `src/renderer/app.js`: editor UI
 - `src/renderer/datalinq.js`: CSV, JSON, XLSX, formatting
 - `src/renderer/gtimport.js`: vMix titles
+- `src/renderer/baseball/engine.js`: baseball scoring rules and game state (runs in the editor and in Node tests)
+- `src/renderer/baseball/fields.js`: the game as DataLinq fields, plus the runner and out-light images
+- `src/renderer/baseball/starter.js`: starter baseball scenes and their links
+- `src/renderer/baseball/console.js`: the Baseball mode console
 
 Licenses: fonts via Fontsource under the SIL OFL; three.js and opentype.js are MIT. NDI® is a registered trademark of Vizrt NDI AB.

@@ -80,6 +80,15 @@ function createControl({ onCommand, log }) {
             if (!cmd) return send(400, { ok: false, error: 'Add ?cmd=, for example ?cmd=SEQI%201001:20' });
             return send(200, await onCommand(cmd));
           }
+          /* baseball scoring: /api/baseball/pitch?kind=ball, /api/baseball/result?kind=hr, /api/baseball/state */
+          const bb = u.pathname.match(/^\/api\/baseball\/(\w+)$/);
+          if (bb) {
+            if (bb[1] === 'state') return send(200, await onCommand({ cmd: 'BASEBALLSTATE' }));
+            const action = { type: bb[1] };
+            for (const [k, v] of u.searchParams) action[k] = /^-?\d+$/.test(v) ? +v : v === 'true' ? true : v === 'false' ? false : v;
+            if (req.method === 'POST') Object.assign(action, await readJson(req));
+            return send(200, await onCommand({ cmd: 'BASEBALL', action }));
+          }
           const tset = u.pathname.match(/^\/api\/timer\/([\w-]+)\/set$/i);
           if (tset) return send(200, await onCommand(`TIMER ${tset[1]}:SET:${u.searchParams.get('value') || '0:00'}`));
           const set = u.pathname.match(/^\/api\/set\/(\d+)$/);
@@ -124,7 +133,7 @@ button.take{background:#b8191f;border-color:#e0464c;font-weight:700}.grid{displa
 code{background:#2c323e;padding:1px 5px;border-radius:3px}</style>
 <h1>Keyline CG Studio · Remote</h1><div class="bar"><button class="take" onclick="go('/api/next')">TAKE NEXT</button><button onclick="go('/api/clearall')">CLEAR ALL</button><button onclick="go('/api/up')">▲ Up</button><button onclick="go('/api/down')">▼ Down</button></div>
 <div class="grid" id="g"></div>
-<p style="color:#9aa3b2;margin-top:18px">RossTalk on TCP: <code>SEQI 1001:20</code> <code>SEQO 1001</code> <code>CLFB 1:20</code> <code>CLRA</code> <code>READ 1001</code> <code>NEXT</code> <code>RESUME 1:20</code> <code>SETDATA 1001:FIELD:value</code> <code>TIMER GAME:START</code></p>
+<p style="color:#9aa3b2;margin-top:18px">RossTalk on TCP: <code>SEQI 1001:20</code> <code>SEQO 1001</code> <code>CLFB 1:20</code> <code>CLRA</code> <code>READ 1001</code> <code>NEXT</code> <code>RESUME 1:20</code> <code>SETDATA 1001:FIELD:value</code> <code>TIMER GAME:START</code> <code>BB pitch kind=ball</code> <code>BB result kind=hr</code></p><p style="color:#9aa3b2">Baseball over HTTP: <code>/api/baseball/pitch?kind=ball</code> <code>/api/baseball/result?kind=1b</code> <code>/api/baseball/runs?team=home&amp;delta=1</code> <code>/api/baseball/undo</code> <code>/api/baseball/state</code></p>
 <script>function go(u){fetch(u).then(load)}
 function load(){fetch('/api/takes').then(r=>r.json()).then(d=>{const g=document.getElementById('g');g.innerHTML='';(d.takes||[]).forEach(t=>{const b=document.createElement('button');b.className='t'+(t.onAir?' air':'');b.innerHTML='<b>'+String(t.id).padStart(4,'0')+'</b>'+t.name.replace(/</g,'&lt;')+'<small>Layer '+t.layer+(t.onAir?' · ON AIR':'')+'</small>';b.onclick=()=>go(t.onAir?'/api/takeout/'+t.id:'/api/take/'+t.id);g.appendChild(b)})})}
 load();setInterval(load,2000)</script>`;

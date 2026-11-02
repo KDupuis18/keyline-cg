@@ -187,6 +187,7 @@ function migrate(p) {
   for (const t of p.takes) { t.data = t.data || {}; t.transition = t.transition || 'auto'; t.channel = t.channel || 1; }
   p.timers = p.timers || [{ name: 'GAME', dir: 'down', start: '12:00' }];
   p.fonts = p.fonts || []; p.styles = p.styles || []; p.materials = p.materials || [];
+  if (p.baseball) p.baseball = BBEngine.normalize(p.baseball);
   p.version = 3; p.app = 'keyline-cg';
   return p;
 }
@@ -211,8 +212,10 @@ function save() {
 }
 let undoStack = [], redoStack = [];
 function snapshot() { undoStack.push(JSON.stringify(P)); if (undoStack.length > 100) undoStack.shift(); redoStack = []; }
-function undo() { if (!undoStack.length) return toast('Nothing to undo'); redoStack.push(JSON.stringify(P)); P = JSON.parse(undoStack.pop()); fixUi(); renderAll(); save(); toast('Undone'); }
-function redo() { if (!redoStack.length) return toast('Nothing to redo'); undoStack.push(JSON.stringify(P)); P = JSON.parse(redoStack.pop()); fixUi(); renderAll(); save(); toast('Redone'); }
+/* design undo never rewinds the live game: scoring has its own undo in Baseball mode */
+const keepGame = next => { const bb = P.baseball; P = next; if (bb) P.baseball = bb; else delete P.baseball; };
+function undo() { if (!undoStack.length) return toast('Nothing to undo'); redoStack.push(JSON.stringify(P)); keepGame(JSON.parse(undoStack.pop())); fixUi(); renderAll(); save(); bbPublish(); toast('Undone'); }
+function redo() { if (!redoStack.length) return toast('Nothing to redo'); undoStack.push(JSON.stringify(P)); keepGame(JSON.parse(redoStack.pop())); fixUi(); renderAll(); save(); bbPublish(); toast('Redone'); }
 function fixUi() {
   if (!P.scenes.find(s => s.id === ui.sceneId)) ui.sceneId = P.scenes[0] && P.scenes[0].id;
   const sc = curScene();
@@ -247,7 +250,11 @@ async function fetchSource(s) {
   let res;
   try {
     if (s.type === 'inline') res = { ok: true, text: s.text || '' };
-    else {
+    else if (s.type === 'baseball') {
+      if (!P.baseball) throw new Error('Open Baseball mode (F5) to start a game');
+      const rows = BBFields.rows(P.baseball);
+      res = { ok: true, rows, text: JSON.stringify(rows) };
+    } else {
       const url = sourceUrl(s);
       if (!url) throw new Error('No address set');
       if (s.type === 'xlsx') {
@@ -294,6 +301,7 @@ function renderDlStatus() {
   el.textContent = `DataLinq ${n} src${errs ? ` · ${errs} error${errs > 1 ? 's' : ''}` : ''}${last ? ' · ' + new Date(last).toLocaleTimeString() : ''}`;
   el.className = 'm ' + (errs ? 'bad' : 'ok');
 }
+const isColor = v => /^(#[0-9a-f]{3,8}|rgba?\(.*\)|hsla?\(.*\))$/i.test(String(v).trim());
 /* the data a take sends to air: static template values merged with live DataLinq values */
 function resolvedData(t) {
   const sc = sceneById(t.sceneId), out = {};
@@ -305,15 +313,22 @@ function resolvedData(t) {
     const r = {};
     for (const k of ['text', 'src', 'items']) if (v[k] != null && v[k] !== '') r[k] = v[k];
     if (v.link) {
-      const res = dlValue(v.link);
-      if (res.ok) {
+      const res = dlValue(v.link), use = v.link.use || '';
+      if (res.ok && use) { // "Show when set" / "Show when empty": the value only switches the object on or off
+        const set = !/^(|0|false|no)$/i.test(String(res.value).trim());
+        if (set !== (use === 'show')) r.hide = true;
+      } else if (res.ok) {
         const val = DataLinq.format(res.value, v.link.fmt);
-        const f = field[o.type] || 'text';
-        if (f === 'src') { if (val) r.src = val; } else r[f] = val;
+        if (o.type === 'rect') { if (isColor(val)) { r.fill = val; r.fill2 = ''; } }
+        else {
+          const f = field[o.type] || 'text';
+          if (f === 'src') { if (val) r.src = val; } else r[f] = val;
+        }
         const c = DataLinq.ruleColor(res.value, v.link.rule);
-        if (c) r.color = c;
-      } else if (v.link.fmt && v.link.fmt.fallback) r[field[o.type] || 'text'] = v.link.fmt.fallback;
+        if (c) { if (o.type === 'rect') { r.fill = c; r.fill2 = ''; } else r.color = c; }
+      } else if (v.link.fmt && v.link.fmt.fallback && o.type !== 'rect') r[field[o.type] || 'text'] = v.link.fmt.fallback;
     }
+    for (const k of ['fill', 'fill2', 'hide']) if (r[k] === undefined) delete r[k];
     if (Object.keys(r).length) out[id] = r;
   }
   return out;
@@ -1021,8 +1036,20 @@ function dlEditor(t, o, after) {
   const row = h('input', { class: 'in', value: link.row, title: 'Data row number (1 = first row under the header), Column=Value to find a row (e.g. Jersey=21), or * for every row (tickers)', placeholder: 'row, Col=Val or *' });
   const col = h('input', { class: 'in', value: link.col, title: 'Column header name, letter (A, B, C…) or number', placeholder: 'column' });
   const val = h('span', { class: 'v dlval', 'data-take': t.id, 'data-obj': o.id });
-  const upd = () => { link.src = srcSel.value; link.row = row.value; link.col = col.value; paintDlVal(val, link); };
-  [srcSel, row, col].forEach(e => bindEdit(e, upd, after));
+  const isBB = () => srcSel.value === BBFields.SOURCE_ID;
+  // the live baseball source is one Field / Value list, so pick a field by name instead of row + column
+  const listId = 'bbFieldList';
+  if (!$('#' + listId)) document.body.append(h('datalist', { id: listId }));
+  const fld = h('input', { class: 'in bbfield', list: listId, value: BBFields.fieldOf(link), placeholder: 'field, e.g. bat.last', title: 'Baseball field. Baseball mode › Graphics setup & fields lists them all.' });
+  const showRowCol = () => { const bb = isBB(); row.hidden = col.hidden = bb; fld.hidden = !bb; if (bb) $('#' + listId).replaceChildren(...(P.baseball ? BBFields.build(P.baseball) : []).map(([f, , a]) => h('option', { value: f }, a))); };
+  const upd = () => {
+    link.src = srcSel.value;
+    if (isBB()) { Object.assign(link, BBFields.link(fld.value.trim())); row.value = link.row; col.value = link.col; }
+    else { link.row = row.value; link.col = col.value; }
+    showRowCol(); paintDlVal(val, link);
+  };
+  [srcSel, row, col, fld].forEach(e => bindEdit(e, upd, after));
+  showRowCol();
   const f = link.fmt, r = link.rule, C = mk(() => { paintDlVal(val, link); after(); });
   const fb = C.txt(f.fallback || '', v => { f.fallback = v; }); fb.placeholder = 'if empty show…';
   const pre = C.txt(f.prefix || '', v => { f.prefix = v; }); pre.placeholder = 'prefix';
@@ -1034,10 +1061,11 @@ function dlEditor(t, o, after) {
     h('label', { title: 'Decimal places for numbers' }, 'Dec', dec),
     C.chk('1,000s', !!f.thousands, v => { f.thousands = v; }),
     fb, pre, suf,
+    C.sel([['', 'Use value as content'], ['show', 'Show only when set'], ['hide', 'Show only when empty']], link.use || '', v => { link.use = v; }),
     C.sel([['', 'No color rule'], ['>', 'Color if >'], ['>=', 'Color if ≥'], ['<', 'Color if <'], ['<=', 'Color if ≤'], ['=', 'Color if ='], ['!=', 'Color if ≠'], ['contains', 'Color if contains'], ['empty', 'Color if empty']], r.op || '', v => { r.op = v; }),
     h('span', { class: 'krow' }, rv, C.col(r.color || '#ffd400', v => { r.color = v; })));
   paintDlVal(val, link);
-  return h('div', { class: 'dlbox' }, srcSel, row, col, val, fmt);
+  return h('div', { class: 'dlbox' }, srcSel, row, col, fld, val, fmt);
 }
 function paintDlVal(el, link) { const r = dlValue(link); const v = r.ok ? DataLinq.format(r.value, link.fmt) : ''; const c = r.ok ? DataLinq.ruleColor(r.value, link.rule) : null; el.textContent = r.ok ? '= ' + (v === '' ? '(empty cell)' : v.replace(/\n/g, ' ⏎ ')) + (c ? '  · color ' + c : '') : '⚠ ' + r.error; el.classList.toggle('err', !r.ok); }
 function refreshDlValues() { const t = curTake(); if (!t) return; $$('.dlval').forEach(el => { const v = t.data[el.dataset.obj]; if (v && v.link) paintDlVal(el, v.link); }); }
@@ -1082,6 +1110,8 @@ function renderOnAir() {
   if (!total) box.append(h('span', { class: 'empty' }, 'Nothing on air. Select a take and press TAKE or Space.'));
   const live = Object.keys(programs[ui.pgmCh].layers).length > 0;
   $('#pgmWrap').classList.toggle('live', live); $('#pgmTally').classList.toggle('live', live);
+  const bt = $('#bbTally'); if (bt) bt.classList.toggle('live', live);
+  if (ui.mode === 'bb') BBConsole.render();
   $('#stAir').textContent = total + (total === 1 ? ' layer' : ' layers') + ' on air';
 }
 function addTake(sc) {
@@ -1114,7 +1144,22 @@ function setData(num, fields) {
   renderRundown();
   return { ok: true, take: t.num, fields: changed };
 }
+/* BB pitch kind=ball · BB result kind=hr · BB runs team=home delta=1 · BB take batter */
+function bbControl(arg) {
+  const [type, ...kv] = arg.split(/\s+/).filter(Boolean);
+  if (!type) return { ok: false, error: 'Usage: BB <action> key=value …, e.g. BB pitch kind=ball' };
+  const a = { type };
+  for (const pair of kv) { const i = pair.indexOf('='); if (i > 0) { const v = pair.slice(i + 1); a[pair.slice(0, i)] = /^-?\d+$/.test(v) ? +v : v === 'true' ? true : v === 'false' ? false : v; } }
+  if (type.toLowerCase() === 'undo') { bbUndoAct(); return { ok: true }; }
+  if (type.toLowerCase() === 'redo') { bbRedoAct(); return { ok: true }; }
+  return bbDispatch(a);
+}
+function bbFieldsJson() { ensureBaseball(); return { ok: true, fields: Object.fromEntries(BBFields.build(P.baseball).map(([f, v]) => [f, v])) }; }
 function handleControl(cmd) {
+  if (cmd && typeof cmd === 'object') {
+    if (cmd.cmd === 'BASEBALL') { logControl(`HTTP baseball ${JSON.stringify(cmd.action)}`); return cmd.action.type === 'undo' ? (bbUndoAct(), { ok: true }) : cmd.action.type === 'redo' ? (bbRedoAct(), { ok: true }) : bbDispatch(cmd.action); }
+    if (cmd.cmd === 'BASEBALLSTATE') return bbFieldsJson();
+  }
   if (cmd && typeof cmd === 'object') { if (cmd.cmd === 'SETDATA') { logControl(`HTTP set ${cmd.take} ${JSON.stringify(cmd.fields)}`); return setData(cmd.take, cmd.fields); } return { ok: false, error: 'Unknown command' }; }
   const line = String(cmd).trim(), sp = line.search(/\s/);
   const verb = (sp < 0 ? line : line.slice(0, sp)).toUpperCase(), arg = sp < 0 ? '' : line.slice(sp + 1).trim();
@@ -1133,6 +1178,7 @@ function handleControl(cmd) {
     case 'NEXT': doTake(curTake()); return ok();
     case 'SETDATA': { const [num, field, ...rest] = parts; return setData(num, { [field]: rest.join(':') }); }
     case 'TIMER': { const [name, action, ...rest] = parts; const r = timerCmd(name, action || 'TOGGLE', rest.join(':')); if (ui.timersOpen) paintTimers(); return r; }
+    case 'BB': case 'BASEBALL': return bbControl(arg);
     case 'GPI': return ok({ note: 'GPI accepted; no action assigned' });
     case 'LIST': return ok({ takes: P.takes.map(t => ({ id: t.num, name: t.name, scene: (sceneById(t.sceneId) || {}).name, channel: chOf(t), layer: t.layer, onAir: airOf(t) != null })), selected: curTake() ? curTake().num : null });
     case 'STATE': return ok({ layers: [1, 2].flatMap(ch => Object.keys(programs[ch].layers).map(L => ({ channel: ch, layer: +L, take: programs[ch].layers[L].msg.num, scene: programs[ch].layers[L].msg.scene.name }))), selected: curTake() ? curTake().num : null, ndi: ui.ndi.running, timers: Object.fromEntries(Object.keys(ui.timerState).map(n => [n, { value: KL.fmtTimer(KL.timerValue(n), 'M:SS.t'), running: ui.timerState[n].running }])) });
@@ -1246,6 +1292,7 @@ async function saveProject(saveAs) {
   return true;
 }
 function loadProject(p, path) {
+  bbUndo = []; bbRedo = [];
   clearAllNow();
   P = migrate(p); ui.filePath = path || null; lsSet(KEY + '-path', path || '');
   undoStack = []; redoStack = [];
@@ -1323,10 +1370,10 @@ const act = {
     P.fonts = P.fonts.filter(f => f.family !== family); P.fonts.push({ family, url: r.url, file: r.name });
     applyFonts(); save(); renderInspector(); toast(`Font "${family}" added. Pick it in the Font list.`);
   },
-  smartUndo: () => { if (isTyping()) document.execCommand('undo'); else undo(); },
-  smartRedo: () => { if (isTyping()) document.execCommand('redo'); else redo(); },
+  smartUndo: () => { if (isTyping()) document.execCommand('undo'); else if (ui.mode === 'bb') bbUndoAct(); else undo(); },
+  smartRedo: () => { if (isTyping()) document.execCommand('redo'); else if (ui.mode === 'bb') bbRedoAct(); else redo(); },
   outputSettings: (focus) => openOutputModal(focus),
-  help: () => modal('Keyboard shortcuts', h('div', { class: 'keys' }, ...[['F3 / F4', 'Layout / Sequence mode'], ['Space', 'Sequence: take selected · Layout: play/stop timeline'], ['Esc', 'Sequence: clear all · Layout: deselect'], ['↑ ↓', 'Move the rundown selection'], [', and .', 'Previous / next frame (Shift: 10 frames)'], ['Home / End', 'First / last frame'], ['K', 'Key the selected object at the current frame'], ['A', 'Toggle Auto-key'], ['Delete', 'Delete selected keyframes (timeline) or object (viewport)'], ['Arrows', 'Nudge object 1px (Shift: 10px)'], [MOD + '+D', 'Duplicate object'], [MOD + '+Z / ' + MOD + '+Y', 'Undo / redo'], [MOD + '+S', 'Save project'], ['Take ID + Enter', 'Jump to a take (Shift+Enter takes it)']].flatMap(([k, d]) => [h('kbd', {}, k), h('span', {}, d)])), [['Close']]),
+  help: () => modal('Keyboard shortcuts', h('div', { class: 'keys' }, ...[['F3 / F4 / F5', 'Layout / Sequence / Baseball mode'], ['B S W F', 'Baseball: ball, called strike, swinging strike, foul'], ['1 2 3 H O K D', 'Baseball: single, double, triple, homer, out, strikeout, double play'], ['Space', 'Sequence: take selected · Layout: play/stop timeline'], ['Esc', 'Sequence: clear all · Layout: deselect'], ['↑ ↓', 'Move the rundown selection'], [', and .', 'Previous / next frame (Shift: 10 frames)'], ['Home / End', 'First / last frame'], ['K', 'Key the selected object at the current frame'], ['A', 'Toggle Auto-key'], ['Delete', 'Delete selected keyframes (timeline) or object (viewport)'], ['Arrows', 'Nudge object 1px (Shift: 10px)'], [MOD + '+D', 'Duplicate object'], [MOD + '+Z / ' + MOD + '+Y', 'Undo / redo'], [MOD + '+S', 'Save project'], ['Take ID + Enter', 'Jump to a take (Shift+Enter takes it)']].flatMap(([k, d]) => [h('kbd', {}, k), h('span', {}, d)])), [['Close']]),
   controlRef: () => openOutputModal('control'),
   about: () => modal('About Keyline CG Studio', h('div', {}, h('p', {}, 'Keyline CG Studio 2.0: broadcast character generator with keyframe animation, layered program output, NDI, DataLinq and RossTalk control.'), h('p', { class: 'note' }, 'Fonts: Barlow Condensed, Oswald, Anton, Teko, Roboto Condensed, Archivo Narrow and Bebas Neue (SIL Open Font License). NDI® is a registered trademark of Vizrt NDI AB.')), [['Close']])
 };
@@ -1361,7 +1408,7 @@ function refreshDlModal() {
     const g = h('div', { class: 'fgrid', style: 'grid-template-columns:110px minmax(0,1fr)' });
     const F = (l, c) => g.append(h('span', { class: 'fl' }, l), c);
     const nameIn = C.txt(s.name, v => { s.name = v; }); nameIn.id = 'dlName'; F('Name', nameIn);
-    F('Type', h('span', {}, { gsheet: 'Google Sheet', url: 'CSV from a web link', file: 'CSV file on this computer (re-read on each refresh)', inline: 'Pasted CSV (stored in the project)', json: 'JSON from a web API or file', xlsx: 'Excel workbook (.xlsx), file or link' }[s.type]));
+    F('Type', h('span', {}, { gsheet: 'Google Sheet', url: 'CSV from a web link', file: 'CSV file on this computer (re-read on each refresh)', inline: 'Pasted CSV (stored in the project)', json: 'JSON from a web API or file', xlsx: 'Excel workbook (.xlsx), file or link', baseball: 'Live baseball game, scored in Baseball mode (F5)' }[s.type]));
     if (s.type === 'gsheet') {
       const u = C.txt(s.url, v => { s.url = v; }); u.id = 'dlUrl'; u.placeholder = 'https://docs.google.com/spreadsheets/d/…'; F('Sheet link', u);
       const sh = C.txt(s.sheet || '', v => { s.sheet = v; }); sh.id = 'dlSheet'; sh.placeholder = 'optional, e.g. Roster'; F('Tab name', sh);
@@ -1374,6 +1421,8 @@ function refreshDlModal() {
       F(s.type === 'json' ? 'Address' : 'Workbook', h('span', { class: 'krow' }, u, h('button', { class: 'mini', onclick: async () => { if (!api) return toast('Needs the desktop app'); const f = await api.pickDataFile(s.type); if (f) { snapshot(); s.url = f; save(); fetchSource(s); refreshDlModal(); } } }, 'Browse…')));
       if (s.type === 'json') { const pth = C.txt(s.path || '', v => { s.path = v; clearTimeout(pth._t); pth._t = setTimeout(() => fetchSource(s), 500); }); pth.id = 'dlPath'; pth.placeholder = 'e.g. data.players or games[0].teams'; F('Path to list', pth); g.append(h('p', { class: 'note' }, 'Point the path at a list of records; each record becomes a row and its fields become columns (nested fields as team.name).')); }
       else { const sh = C.txt(s.sheet || '', v => { s.sheet = v; clearTimeout(sh._t); sh._t = setTimeout(() => fetchSource(s), 500); }); sh.id = 'dlSheet'; sh.placeholder = 'first sheet'; F('Sheet', sh); g.append(h('p', { class: 'note' }, 'Reads the values Excel last saved (formulas show their last result). Dates appear as Excel serial numbers unless the cell is text.')); }
+    } else if (s.type === 'baseball') {
+      g.append(h('p', { class: 'note' }, 'Updates the moment a pitch or play is scored. Link a field with row ', h('code', {}, 'Field=bat.last'), ' and column ', h('code', {}, 'Value'), ', or pick it by name in the DL editor. Baseball mode › Graphics setup & fields lists every field.'));
     } else if (s.type === 'file') {
       const pth = C.txt(s.path || '', v => { s.path = v; }); pth.id = 'dlPath';
       F('File', h('span', { class: 'krow' }, pth, h('button', { class: 'mini', onclick: async () => { if (!api) return toast('Needs the desktop app'); const f = await api.pickDataFile('csv'); if (f) { snapshot(); s.path = f; save(); fetchSource(s); refreshDlModal(); } } }, 'Browse…')));
@@ -1383,7 +1432,7 @@ function refreshDlModal() {
       F('CSV text', ta);
     }
     F('Options', h('span', { class: 'chkrow' }, C.chk('First row is headers', s.header !== false, v => { s.header = v; fetchSource(s); }), C.chk('Enabled', s.enabled !== false, v => { s.enabled = v; scheduleSources(); })));
-    if (s.type !== 'inline') { const iv = C.num(s.interval, v => { s.interval = Math.max(0, v); clearTimeout(iv._t); iv._t = setTimeout(scheduleSources, 600); }, { min: 0, step: 1 }); iv.id = 'dlInt'; F('Refresh every', h('span', { class: 'krow' }, iv, h('span', { class: 'tl' }, 'seconds (0 = manual)'))); }
+    if (s.type !== 'inline' && s.type !== 'baseball') { const iv = C.num(s.interval, v => { s.interval = Math.max(0, v); clearTimeout(iv._t); iv._t = setTimeout(scheduleSources, 600); }, { min: 0, step: 1 }); iv.id = 'dlInt'; F('Refresh every', h('span', { class: 'krow' }, iv, h('span', { class: 'tl' }, 'seconds (0 = manual)'))); }
     const c = DL[s.id] || {};
     g.append(h('div', { class: 'btnrow' },
       h('button', { class: 'tbtn on', onclick: () => fetchSource(s) }, 'Refresh now'),
@@ -1406,6 +1455,88 @@ function refreshDlModal() {
   if (active && $('#' + active)) { const el = $('#' + active); el.focus(); if (el.setSelectionRange && el.type !== 'number') { const n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) { /* ignore */ } } }
 }
 function refreshDlTitles() { const on = $('#dlRoot .src.on b'); const s = P.dataSources.find(x => x.id === (ui.dlOpen || {}).sel); if (on && s) on.textContent = s.name; }
+
+/* ======================= Baseball mode (F5) ======================= */
+/* The game lives in P.baseball and saves with the project. Every scoring action
+   refreshes the built-in "Baseball (live game)" DataLinq source, so takes linked
+   to it update on air immediately. Scoring has its own undo stack. */
+let bbUndo = [], bbRedo = [];
+const bbOffT = {};
+const bbSource = () => P.dataSources.find(s => s.id === BBFields.SOURCE_ID);
+function ensureBaseball() {
+  let changed = false;
+  if (!P.baseball) { P.baseball = BBEngine.newState(); changed = true; }
+  if (!bbSource()) { P.dataSources.push({ id: BBFields.SOURCE_ID, name: 'Baseball (live game)', type: 'baseball', header: true, interval: 0, enabled: true }); changed = true; }
+  if (changed) { save(); bbPublish(); }
+}
+function bbPublish() { const s = bbSource(); if (s && P.baseball) fetchSource(s); }
+function bbDispatch(a) {
+  ensureBaseball();
+  const before = JSON.stringify(P.baseball), work = JSON.parse(before), pa = P.baseball.game.pa;
+  let isGame;
+  try { isGame = BBEngine.apply(work, a); } catch (err) { toast(err.message); return { ok: false, error: err.message }; }
+  if (isGame) { bbUndo.push(before); if (bbUndo.length > 200) bbUndo.shift(); bbRedo = []; }
+  P.baseball = work; save(); bbPublish();
+  // a new batter came up: fire the automatic batter graphic
+  if (work.game.pa !== pa && !work.game.transition && !work.game.final) bbAutoTake(work.auto.batterTake, work.auto.batterSecs);
+  BBConsole.render();
+  if (ui.mode === 'seq') refreshDlValues();
+  return { ok: true };
+}
+function bbStep(from, to, label) {
+  if (!from.length) return toast('Nothing to ' + label);
+  const auto = P.baseball.auto;
+  to.push(JSON.stringify(P.baseball)); P.baseball = JSON.parse(from.pop()); P.baseball.auto = auto;
+  save(); bbPublish(); BBConsole.render(); toast(label === 'undo' ? 'Undid the last scoring action' : 'Redid the scoring action');
+}
+const bbUndoAct = () => bbStep(bbUndo, bbRedo, 'undo'), bbRedoAct = () => bbStep(bbRedo, bbUndo, 'redo');
+function bbTakeFor(t, secs) {
+  doTake(t, { advance: false, follow: false });
+  clearTimeout(bbOffT[t.id]);
+  if (+secs > 0) bbOffT[t.id] = setTimeout(() => { const a = airOf(t); if (a) outLayer(a.L, a.ch); }, secs * 1000);
+  BBConsole.render();
+}
+function bbAutoTake(id, secs) { const t = id && P.takes.find(x => x.id === id); if (t) bbTakeFor(t, secs); }
+function bbAddStarter() {
+  ensureBaseball(); snapshot();
+  const { scenes, takes } = BBStarter.build(O);
+  for (const sc of scenes) { sc.id = uid(); sc.tl = { fps: 30, pause: 30, end: 45 }; KL.presetTimeline(sc); P.scenes.push(sc); }
+  let num = Math.max(1000, ...P.takes.map(t => t.num)) + 1;
+  const made = {};
+  for (const [scName, name, map, role] of takes) {
+    const sc = scenes.find(x => x.name === scName), data = {};
+    for (const [objName, spec] of Object.entries(map)) { const ob = sc.objects.find(x => x.name === objName); if (ob) data[ob.id] = BBStarter.dataFor(spec); }
+    const t = { id: uid(), num: num++, sceneId: sc.id, name, layer: sc.layer, channel: 1, transition: 'auto', dur: 0, data };
+    P.takes.push(t);
+    if (role) made[role] = t.id;
+  }
+  if (made.batter && !P.baseball.auto.batterTake) P.baseball.auto.batterTake = made.batter;
+  if (made.pitch && !P.baseball.auto.pitchTake) P.baseball.auto.pitchTake = made.pitch;
+  save(); renderCats(); renderSceneLists(); BBConsole.render();
+  toast(`Added ${scenes.length} baseball scenes and ${takes.length} takes. Redesign them in Layout mode.`);
+}
+act.bbStarter = bbAddStarter;
+act.baseball = () => setMode('bb');
+/* program monitor moves into Baseball mode while it's open, so there is still one program view */
+const pgmHome = $('#pgmWrap').parentElement;
+function placeProgramMonitor(m) {
+  const pgm = $('#pgmWrap'), list = $('#onairList'), slot = BBConsole.pgmSlot();
+  const dest = m === 'bb' ? slot : pgmHome;
+  if (dest && pgm.parentElement !== dest) { dest.append(pgm, list); fitMon(pgm); }
+}
+BBConsole.mount($('#bbMode'), {
+  get: () => P.baseball || (ensureBaseball(), P.baseball),
+  dispatch: bbDispatch,
+  takes: () => P.takes.map(t => ({ t, scene: (sceneById(t.sceneId) || {}).name || '', linked: takeUsesSource(t, BBFields.SOURCE_ID), onAir: !!airOf(t) })),
+  findTake: id => id && P.takes.find(t => t.id === id),
+  take: (t, secs) => bbTakeFor(t, secs),
+  out: t => { const a = airOf(t); if (a) outLayer(a.L, a.ch); BBConsole.render(); },
+  toast, addStarter: bbAddStarter,
+  openLayout: id => { const sc = sceneById(id); if (!sc) return; ui.sceneId = id; ui.selObj = null; ui.selKeys = []; ui.frame = KL.tlOf(sc).pause; setMode('layout'); },
+  fields: () => BBFields.build(P.baseball),
+  starterScenes: () => P.scenes.filter(x => /^BB /.test(x.name)),
+  undo: bbUndoAct, redo: bbRedoAct, canUndo: () => ({ undo: bbUndo.length > 0, redo: bbRedo.length > 0 })
+});
 
 /* ======================= Clocks & timers panel ======================= */
 function openTimers() {
@@ -1514,9 +1645,9 @@ const MENUS = {
   File: [['New Project', MOD + '+N', 'newProject'], ['Open…', MOD + '+O', 'open'], ['Save', MOD + '+S', 'save'], ['Save As…', '', 'saveAs'], 0, ['New Scene', '', 'newScene'], ['Duplicate Scene', '', 'dupScene'], ['Delete Scene…', '', 'delScene'], 0, ['Import vMix GT Title…', '', 'importGT'], ['Import Font…', '', 'importFont'], ['Export DashBoard Panel…', '', 'exportDashboard'], 0, ['Load Sample Project…', '', 'reset']],
   Edit: [['Undo', MOD + '+Z', 'smartUndo'], ['Redo', isMac ? 'Cmd+Shift+Z' : 'Ctrl+Y', 'smartRedo'], 0, ['Duplicate Object', MOD + '+D', 'objDup'], ['Delete Object', 'Del', 'objDel'], ['Bring Forward', '', 'objUp'], ['Send Backward', '', 'objDown']],
   Animation: [['Play / Stop', 'Space', 'tlPlay'], ['Play In', '', 'tlPlayIn'], ['Play Out', '', 'tlPlayOut'], 0, ['Toggle Auto-key', 'A', 'tlAuto'], ['Key Selected Object', 'K', 'tlKey'], ['Delete Selected Keys', 'Del', 'tlDelKeys'], 0, ['Set Pause Point Here', '', 'tlSetPause'], ['Set End Here', '', 'tlSetEnd']],
-  View: [['Layout Mode', 'F3', () => setMode('layout')], ['Sequence Mode', 'F4', () => setMode('seq')], 0, ['Toggle Safe Areas', '', 'toggleSafe'], ['Toggle Camera Plate', '', 'togglePlate']],
+  View: [['Layout Mode', 'F3', () => setMode('layout')], ['Sequence Mode', 'F4', () => setMode('seq')], ['Baseball Mode', 'F5', () => setMode('bb')], 0, ['Toggle Safe Areas', '', 'toggleSafe'], ['Toggle Camera Plate', '', 'togglePlate']],
   Sequence: [['Take Selected', 'Space', 'take'], ['Clear Selected Layer', '', 'clearSel'], ['Clear All Layers', 'Esc', 'clearAll'], ['Clear Channel 1', '', () => clearAll(1)], ['Clear Channel 2', '', () => clearAll(2)], 0, ['Add Take From Current Scene', '', 'addTakeCur'], ['Duplicate Take', '', 'takeDup'], ['Delete Take', '', 'takeDel']],
-  Data: [['DataLinq Sources…', '', 'dataLinq'], ['Clocks & Timers…', '', 'timers'], ['Refresh All Sources', '', () => { P.dataSources.forEach(fetchSource); toast('Refreshing all sources'); }]],
+  Data: [['DataLinq Sources…', '', 'dataLinq'], ['Add Starter Baseball Graphics', '', 'bbStarter'], ['Clocks & Timers…', '', 'timers'], ['Refresh All Sources', '', () => { P.dataSources.forEach(fetchSource); toast('Refreshing all sources'); }]],
   Output: [['Start / Stop NDI', '', 'toggleNdi'], ['Output & Control Settings…', '', 'outputSettings'], ['Export DashBoard Panel…', '', 'exportDashboard']],
   Help: [['Keyboard Shortcuts', '', 'help'], ['RossTalk & HTTP Reference', '', 'controlRef'], ['About', '', 'about']]
 };
@@ -1546,19 +1677,23 @@ let toastT = 0;
 function toast(msg) { const s = $('#stMsg'); s.textContent = msg; clearTimeout(toastT); toastT = setTimeout(() => { s.textContent = 'Ready'; }, 4000); }
 
 /* ======================= mode + global ======================= */
-function syncToggles() { $('#mLayout').classList.toggle('on', ui.mode === 'layout'); $('#mSeq').classList.toggle('on', ui.mode === 'seq'); $('#bSafe').classList.toggle('on', ui.safe); $('#bPlate').classList.toggle('on', ui.plate); renderNdi(); }
+function syncToggles() { $('#mLayout').classList.toggle('on', ui.mode === 'layout'); $('#mSeq').classList.toggle('on', ui.mode === 'seq'); $('#mBb').classList.toggle('on', ui.mode === 'bb'); $('#bSafe').classList.toggle('on', ui.safe); $('#bPlate').classList.toggle('on', ui.plate); renderNdi(); }
 function setMode(m) {
   if (m !== ui.mode) stopTl();
-  ui.mode = m; $('#layoutMode').hidden = m !== 'layout'; $('#seqMode').hidden = m !== 'seq';
+  ui.mode = m; $('#layoutMode').hidden = m !== 'layout'; $('#seqMode').hidden = m !== 'seq'; $('#bbMode').hidden = m !== 'bb';
+  if (m === 'bb') ensureBaseball();
+  placeProgramMonitor(m);
   lsSet(KEY + '-mode', m);
   renderAll();
   requestAnimationFrame(() => { $$('.mon').forEach(fitMon); remeasureAll(); });
 }
 $('#mLayout').onclick = () => setMode('layout');
 $('#mSeq').onclick = () => setMode('seq');
+$('#mBb').onclick = () => setMode('bb');
 function renderAll() {
   renderCats(); renderSceneLists();
   if (ui.mode === 'layout') renderLayoutSide();
+  else if (ui.mode === 'bb') BBConsole.render();
   else { renderRundown(); renderTakeInsp(); renderPreview(); }
   renderOnAir(); syncToggles(); updateTitle(); renderDlStatus();
 }
@@ -1574,6 +1709,7 @@ let nudgeT = 0;
 document.addEventListener('keydown', e => {
   if (e.key === 'F3') { e.preventDefault(); setMode('layout'); return; }
   if (e.key === 'F4') { e.preventDefault(); setMode('seq'); return; }
+  if (e.key === 'F5') { e.preventDefault(); setMode('bb'); return; }
   if (!$('#modal').hidden) { if (e.key === 'Escape') closeModal(); return; }
   if (openMenu && e.key === 'Escape') { closeMenu(); return; }
   const k = e.key.toLowerCase();
@@ -1589,6 +1725,7 @@ document.addEventListener('keydown', e => {
     else if (k === 'd' && ui.mode === 'layout') { e.preventDefault(); act.objDup(); }
     return;
   }
+  if (ui.mode === 'bb') { BBConsole.key(e); return; }
   if (ui.mode === 'layout') {
     const o = selObj();
     if (e.key === ' ') { e.preventDefault(); playTl(); }
@@ -1666,7 +1803,7 @@ if (api) {
 initTimers(); KL.setFonts(P.fonts);
 ui.frame = curScene() ? KL.tlOf(curScene()).pause : 0;
 ui.dirty = false;
-setMode(lsGet(KEY + '-mode') === 'seq' ? 'seq' : 'layout');
+setMode({ seq: 'seq', bb: 'bb' }[lsGet(KEY + '-mode')] || 'layout');
 scheduleSources();
 updateTitle();
 if (api) {
@@ -1674,5 +1811,5 @@ if (api) {
   // localStorage can be cleared or full; the file autosave is the crash-recovery copy
   if (!lsGet(KEY)) api.loadAutosave().then(t => { try { const p = t && JSON.parse(t); if (p && p.scenes && p.takes) { loadProject(p, null); ui.dirty = true; updateTitle(); toast('Recovered your last autosaved project'); } } catch (e) { /* no autosave */ } });
 }
-window.__kl = { get P() { return P; }, ui, program, programs, timerCmd, handleControl, act, setFrame, DL, fetchSource, dashboardXML, setProp, sceneChanged, contentOf, loadProject };
+window.__kl = { get P() { return P; }, ui, bbDispatch, bbAddStarter, program, programs, timerCmd, handleControl, act, setFrame, DL, fetchSource, dashboardXML, setProp, sceneChanged, contentOf, loadProject };
 })();

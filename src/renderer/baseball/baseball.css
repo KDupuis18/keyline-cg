@@ -1,0 +1,106 @@
+/* Baseball mode (F5) — uses the editor's panel / button styles, plus scoring controls */
+#bbMode { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+#bbMode .bb-tabs { align-items: flex-end; overflow: visible; }
+#bbMode .bb-sp { flex: 1; }
+#bbMode .bb-undo { display: flex; gap: 3px; padding-bottom: 3px; }
+#bbMode .bb-view { min-height: 0; display: grid; gap: 3px; }
+#bbGame { grid-template-columns: 360px minmax(0, 1fr) 330px; }
+#bbTeams { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); overflow: auto; align-items: start; }
+#bbSetup { grid-template-columns: minmax(0, 1fr); }
+#bbMode .col { overflow: auto; }
+#bbMode .bb-note { color: var(--muted); font-size: 11px; margin: 6px 0 0; }
+#bbMode h4 { margin: 12px 0 5px; font-size: 12px; display: flex; gap: 8px; align-items: baseline; }
+#bbMode h4 .bb-note { margin: 0; font-weight: 400; }
+#bbMode .bb-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; align-items: center; }
+#bbMode .bb-row .in { height: 25px; }
+#bbMode .bb-file { display: inline-flex; align-items: center; text-decoration: none; color: inherit; cursor: pointer; }
+#bbMode .bb-inn { margin-left: auto; background: #1d2330; color: #f3b61f; padding: 0 8px; border-radius: 2px; font: 700 13px/18px var(--mono); }
+
+/* score */
+.bb-st { width: 100%; border-collapse: collapse; }
+.bb-st th { font-size: 10px; color: var(--muted); font-weight: 600; }
+.bb-st td { padding: 2px; text-align: center; white-space: nowrap; }
+.bb-st .mini { padding: 0 5px; margin: 0 1px; }
+.bb-tm { text-align: left !important; font: 700 18px 'Barlow Condensed', var(--ui); display: flex; align-items: center; gap: 6px; }
+.bb-tm i { width: 6px; height: 22px; background: var(--c1); border-right: 3px solid var(--c2); }
+.bb-up { color: #d3262d; font-size: 11px; }
+.bb-big { font: 800 26px 'Barlow Condensed', var(--ui); min-width: 34px; }
+.bb-n { font: 700 18px 'Barlow Condensed', var(--ui); }
+.bb-ls { margin-top: 8px; border-collapse: collapse; width: 100%; font: 600 13px var(--mono); }
+.bb-ls th { font-size: 10px; color: var(--muted); font-weight: 400; }
+.bb-ls td, .bb-ls th { text-align: center; border: 1px solid var(--line2); padding: 1px 2px; background: #fff; }
+.bb-ls td:first-child { font-weight: 700; }
+
+/* situation */
+.bb-situ { display: flex; gap: 14px; align-items: center; }
+.bb-dia { position: relative; width: 132px; height: 112px; flex: none; }
+.bb-base { position: absolute; width: 36px; height: 36px; transform: rotate(45deg); border: 3px solid #8b93a1; background: #fff; cursor: pointer; border-radius: 3px; }
+.bb-base:hover { border-color: var(--sel); }
+.bb-base.on { background: #f0b400; border-color: #7a5b00; }
+.bb-base.b2 { left: 48px; top: 4px; } .bb-base.b1 { left: 88px; top: 44px; } .bb-base.b3 { left: 8px; top: 44px; }
+.bb-home { position: absolute; left: 55px; top: 90px; width: 22px; height: 16px; background: #8b93a1; clip-path: polygon(0 0, 100% 0, 100% 50%, 50% 100%, 0 50%); }
+.bb-counts { display: grid; gap: 8px; }
+.bb-counts div { display: flex; align-items: center; gap: 6px; }
+.bb-counts label { width: 48px; color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: .08em; }
+.bb-counts i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #8b93a1; background: #fff; cursor: pointer; }
+.bb-counts i.on.b { background: #1b9a47; border-color: #0f5a2a; }
+.bb-counts i.on.s { background: #f0b400; border-color: #7a5b00; }
+.bb-counts i.on.o { background: #d3262d; border-color: #7d0d11; }
+
+/* pitch / result buttons */
+.bb-pitch { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px; }
+.bb-res { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.bb-b { position: relative; height: 44px; border: 1px solid; border-radius: 3px; cursor: pointer; font: 700 16px 'Barlow Condensed', var(--ui); letter-spacing: .05em; color: #fff; }
+.bb-pitch .bb-b { height: 52px; font-size: 17px; }
+.bb-b kbd { position: absolute; right: 4px; top: 3px; font: 9px var(--mono); opacity: .75; }
+.bb-b:active { transform: translateY(1px); }
+.bb-b.ball { background: linear-gradient(#2bb24c, #1b8a42); border-color: #0f5a2a; }
+.bb-b.strike { background: linear-gradient(#f2a81d, #c9820b); border-color: #7a5b00; }
+.bb-b.foul { background: linear-gradient(#7b8494, #5a616e); border-color: #3d424b; }
+.bb-b.hit { background: linear-gradient(#3f6fd1, #2a52a8); border-color: #1b3772; }
+.bb-b.hr { background: linear-gradient(#ef4a50, #b8191f); border-color: #7d0d11; }
+.bb-b.out { background: linear-gradient(#5a3f47, #3d2a30); border-color: #2a1a1f; }
+.bb-b.on { background: linear-gradient(#1d8a8f, #0e6166); border-color: #094347; }
+.bb-b.wide { grid-column: span 3; font-size: 14px; }
+.bb-b:hover { filter: brightness(1.1); }
+.bb-last { margin-top: 8px; padding: 6px 8px; background: #fff; border: 1px solid var(--line2); min-height: 28px; }
+
+/* program + people */
+.bb-pgm { flex: 1; min-height: 260px; }
+.bb-pgmslot { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.bb-pgmslot .mon { flex: 1; }
+.bb-two { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; flex: none; }
+.bb-who { display: flex; gap: 10px; align-items: center; }
+.bb-who .n { width: 46px; height: 46px; flex: none; display: grid; place-items: center; background: var(--c1); color: #fff; border-bottom: 4px solid var(--c2); font: 800 24px 'Barlow Condensed', var(--ui); }
+.bb-who b { display: block; font: 700 19px/1.05 'Barlow Condensed', var(--ui); text-transform: uppercase; }
+.bb-who small { display: block; color: var(--muted); }
+.bb-pc { margin-left: auto; text-align: center; font: 800 26px/1 'Barlow Condensed', var(--ui); }
+.bb-pc small { display: block; font: 600 9px var(--ui); color: var(--muted); letter-spacing: .08em; }
+.bb-order { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.bb-order .mini { height: 24px; display: flex; align-items: center; gap: 5px; text-align: left; overflow: hidden; }
+.bb-order .mini b { width: 12px; color: var(--muted); }
+.bb-order .mini span { margin-left: auto; color: var(--muted); font-size: 10px; }
+.bb-tk { text-align: right; padding-right: 4px !important; }
+.bb-tk .mini { width: 46px; }
+.bb-go { background: linear-gradient(#ef4a50, #b8191f) !important; color: #fff; border-color: #7d0d11 !important; font-weight: 700; }
+
+/* teams */
+.bb-chip { width: 12px; height: 12px; background: var(--c1); border: 2px solid var(--c2); }
+.bb-tform { grid-template-columns: 92px minmax(0, 1fr) !important; }
+.bb-tform input[type=color] { width: 54px; height: 24px; padding: 0 2px; }
+.bb-logo { width: 34px; height: 34px; border: 1px solid var(--line); background: #1b2430 center / contain no-repeat; }
+.bb-lu { display: grid; grid-template-columns: 16px minmax(0, 1fr) 60px 54px; gap: 3px 5px; align-items: center; }
+.bb-lu b { text-align: right; color: var(--muted); }
+.bb-roster { max-height: 360px; overflow: auto; border: 1px solid var(--line); }
+.bb-roster .grid { table-layout: auto; }
+.bb-roster td { padding: 0 1px; }
+.bb-roster .in { border-color: transparent; background: transparent; height: 20px; }
+.bb-roster .in:hover { border-color: var(--line2); }
+.bb-roster .in:focus { background: #fff; }
+
+/* field reference */
+.bb-fields .mini { font-family: var(--mono); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.bb-about { color: var(--muted); }
+
+/* DataLinq editor: baseball field picker */
+.dlbox .bbfield { font-family: var(--mono); }

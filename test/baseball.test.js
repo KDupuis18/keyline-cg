@@ -1,8 +1,10 @@
-/* Unit tests for the Bullpen game engine: node test/engine.test.js */
+/* Unit tests for the baseball scoring engine and its live fields: node test/baseball.test.js */
 'use strict';
 const assert = require('assert');
-const E = require('../lib/engine');
-const S = require('../public/shared.js');
+const E = require('../src/renderer/baseball/engine.js');
+const S = require('../src/renderer/baseball/shared.js');
+const F = require('../src/renderer/baseball/fields.js');
+const ST = require('../src/renderer/baseball/starter.js');
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -176,38 +178,90 @@ test('removing a player drops him from the lineup', () => {
   assert.ok(!t.lineup.some(s => s.id === id));
 });
 
-console.log('graphics');
-test('take pins the current batter; preview then take clears preview', () => {
-  const st = fresh();
-  E.apply(st, { type: 'preview', gfx: { type: 'batter' } });
-  assert.strictEqual(st.gfx.preview.player, st.teams.away.lineup[0].id);
-  E.apply(st, { type: 'take' });
-  assert.strictEqual(st.gfx.lower.type, 'batter');
-  assert.strictEqual(st.gfx.preview, null);
-  run(st, '1b');
-  assert.strictEqual(st.gfx.lower.player, st.teams.away.lineup[0].id, 'graphic on air still shows the first batter');
+console.log('live fields');
+const field = (st, f) => { const r = F.build(st).find(x => x[0] === f); return r ? r[1] : undefined; };
+test('count, runners, inning label and lights follow the game', () => {
+  const st = run(fresh(), 'ball', 'called', '2b');
+  assert.strictEqual(field(st, 'count'), '0-0');
+  assert.strictEqual(field(st, 'runners'), 'Runner on 2nd');
+  assert.strictEqual(field(st, 'base2'), '1');
+  assert.strictEqual(field(st, 'base1'), '');
+  assert.strictEqual(field(st, 'inning.label'), '▲ 1');
+  assert.ok(field(st, 'bases.img').startsWith('data:image/svg+xml'));
+  E.apply(st, { type: 'endHalf' });
+  assert.strictEqual(field(st, 'inning.label'), 'MID 1');
+  assert.strictEqual(field(st, 'live'), '');
+  assert.strictEqual(field(st, 'away.batting'), '');
 });
-test('graphic actions are not undoable, game actions are', () => {
-  const st = fresh();
-  assert.strictEqual(E.apply(st, { type: 'bug' }), false);
-  assert.strictEqual(E.apply(st, { type: 'pitch', kind: 'ball' }), true);
+test('batter and pitcher fields', () => {
+  const st = run(fresh(), 'hr');
+  assert.strictEqual(field(st, 'bat.name'), 'Tyler Brennan');
+  assert.strictEqual(field(st, 'bat.tag'), 'CF · BATS L · 2ND');
+  assert.strictEqual(field(st, 'pit.today'), '0.0 IP, 1 H, 1 R, 0 BB, 0 K');
+  assert.strictEqual(field(st, 'pit.pc'), 'P: 1');
+  assert.strictEqual(field(st, 'away.runs'), '1');
+  assert.strictEqual(field(st, 'away.inn1'), '1');
+  assert.strictEqual(field(st, 'home.inn1'), '');
+  assert.strictEqual(field(st, 'deck.last'), 'Whitfield');
 });
-test('auto batter lower third after each plate appearance', () => {
+test('due up is the team batting next half (or the team about to bat during a break)', () => {
   const st = fresh();
-  E.apply(st, { type: 'auto', batter: true, secs: 5 });
-  run(st, 'k');
-  assert.strictEqual(st.gfx.lower.player, st.teams.away.lineup[1].id);
-  assert.strictEqual(st.gfx.lower.secs, 5);
+  assert.strictEqual(field(st, 'due.team'), 'Foxes');
+  E.apply(st, { type: 'endHalf' });
+  assert.strictEqual(field(st, 'due.team'), 'Foxes');
+  assert.strictEqual(field(st, 'due1.last'), 'Castellano');
 });
-test('unknown actions throw', () => {
+test('pitch speed is cleared when the plate appearance ends', () => {
+  const st = fresh();
+  E.apply(st, { type: 'pitchInfo', mph: 97, pitch: 'Slider' });
+  assert.strictEqual(field(st, 'pitch.mph'), '97');
+  assert.strictEqual(field(st, 'pitch.type'), 'SLIDER');
+  run(st, 'out');
+  assert.strictEqual(field(st, 'pitch.mph'), '');
+});
+test('field names are unique; rows have a Field / Value header', () => {
+  const rows = F.rows(fresh());
+  assert.deepStrictEqual(rows[0].slice(0, 2), ['Field', 'Value']);
+  const names = rows.slice(1).map(r => r[0]);
+  assert.strictEqual(new Set(names).size, names.length);
+});
+test('link helpers round-trip a field name', () => {
+  const l = F.link('bat.last');
+  assert.deepStrictEqual([l.src, l.row, l.col], ['baseball', 'Field=bat.last', 'Value']);
+  assert.strictEqual(F.fieldOf(l), 'bat.last');
+});
+test('plate appearances are counted so the console can fire the batter graphic', () => {
+  const st = run(fresh(), 'ball', 'k', '1b');
+  assert.strictEqual(st.game.pa, 2);
+});
+
+console.log('starter graphics');
+test('every starter link points at a real field and a real object', () => {
+  let n = 0;
+  const O = (type, name, x, y, w, h, p, extra) => ({ id: 'o' + (n++), type, name, x, y, w, h, p, anim: extra.anim });
+  const { scenes, takes } = ST.build(O);
+  const names = new Set(F.build(fresh()).map(r => r[0]));
+  assert.strictEqual(scenes.length, 7); assert.strictEqual(takes.length, 8);
+  for (const [scName, , map] of takes) {
+    const sc = scenes.find(s => s.name === scName);
+    for (const [obj, spec] of Object.entries(map)) {
+      assert.ok(sc.objects.some(o => o.name === obj), `${scName} has ${obj}`);
+      assert.ok(names.has(typeof spec === 'string' ? spec : spec.f), `${obj} → ${JSON.stringify(spec)}`);
+    }
+  }
+});
+test('auto settings are not undoable game actions', () => {
+  const st = fresh();
+  assert.strictEqual(E.apply(st, { type: 'auto', batterTake: 'abc', batterSecs: 5 }), false);
+  assert.strictEqual(st.auto.batterTake, 'abc');
   assert.throws(() => E.apply(fresh(), { type: 'nope' }));
-  assert.throws(() => E.apply(fresh(), { type: 'take', gfx: { type: 'nope' } }));
 });
-test('normalize fills in a sparse save', () => {
-  const st = E.normalize({ teams: { away: { name: 'A', roster: [], lineup: [] }, home: { name: 'B', roster: [], lineup: [] } } });
+test('normalize fills in a sparse save and drops the old standalone graphics state', () => {
+  const st = E.normalize({ gfx: { bug: true }, teams: { away: { name: 'A', roster: [], lineup: [] }, home: { name: 'B', roster: [], lineup: [] } } });
   assert.strictEqual(st.game.inning, 1);
-  assert.ok(st.gfx.ticker);
+  assert.strictEqual(st.gfx, undefined);
   assert.strictEqual(st.teams.away.abbr, 'AWA');
+  assert.strictEqual(st.auto.batterSecs, 7);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
