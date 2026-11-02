@@ -239,6 +239,51 @@
     }
     return d;
   }
+  /* Masks that follow the mask object's real shape, rotation and scale, an image's transparency,
+     inverted or with a soft (feathered) edge. Drawn as an SVG / image CSS mask in the masked object's box. */
+  const n2 = v => Math.round(v * 100) / 100;
+  function shapeSvg(kind, mp, mw, mh) {
+    if (kind === 'ellipse') return `<ellipse cx='${n2(mw / 2)}' cy='${n2(mh / 2)}' rx='${n2(mw / 2)}' ry='${n2(mh / 2)}'/>`;
+    const poly = SHAPES[kind];
+    if (poly) {
+      const pts = poly.slice(8, -1).split(',').map(pt => pt.trim().split(/\s+/).map((v, i) => n2(parseFloat(v) / (v.endsWith('%') ? 100 : 1) * (v.endsWith('%') ? (i ? mh : mw) : 1))).join(','));
+      return `<polygon points='${pts.join(' ')}'/>`;
+    }
+    const rx = kind === 'pill' ? Math.min(mw, mh) / 2 : Math.min(+mp.radius || 0, mw / 2, mh / 2);
+    return `<rect width='${n2(mw)}' height='${n2(mh)}' rx='${n2(rx)}'/>`;
+  }
+  function maskLayers(el, o, m, f, x, y, w, h) {
+    const mel = el.parentElement && el.parentElement.querySelector(`.go[data-id="${m.id}"]`);
+    const mp = (mel && mel._p) || Object.assign({}, DEF[m.type], m.p);
+    const mx = valueAt(m, 'x', f) - x, my = valueAt(m, 'y', f) - y, mw = Math.max(0, valueAt(m, 'w', f)), mh = Math.max(0, valueAt(m, 'h', f));
+    const rot = valueAt(m, 'rotation', f), sc = valueAt(m, 'scale', f) / 100;
+    const mode = o.maskMode || 'box', inv = !!o.maskInvert, fe = Math.max(0, +o.maskFeather || 0);
+    if (mode === 'alpha' && (m.type === 'image') && mp.src) {
+      // the image's own transparency, placed where the mask object is (rotation is ignored)
+      let iw = mw * sc, ih = mh * sc;
+      const im = mel && mel.querySelector('img');
+      if (mp.fit !== 'fill' && im && im.naturalWidth) {
+        const k = (mp.fit === 'cover' ? Math.max : Math.min)(iw / im.naturalWidth, ih / im.naturalHeight);
+        iw = im.naturalWidth * k; ih = im.naturalHeight * k;
+      }
+      const px = mx + (mw - iw) / 2, py = my + (mh - ih) / 2;
+      const url = `url("${String(mp.src).replace(/"/g, '%22')}")`;
+      return inv ? { image: `linear-gradient(#000,#000), ${url}`, position: `0 0, ${n2(px)}px ${n2(py)}px`, size: `100% 100%, ${n2(iw)}px ${n2(ih)}px`, composite: true }
+        : { image: url, position: `${n2(px)}px ${n2(py)}px`, size: `${n2(iw)}px ${n2(ih)}px` };
+    }
+    const kind = mode === 'shape' && m.type === 'rect' ? (mp.shape || 'rect') : 'rect';
+    let shape = shapeSvg(kind, mode === 'shape' ? mp : {}, mw, mh);
+    if (mode === 'shape' && m.type === 'rect' && +mp.skew) shape = `<g transform='translate(${n2(mw / 2)} ${n2(mh / 2)}) skewX(${+mp.skew}) translate(${n2(-mw / 2)} ${n2(-mh / 2)})'>${shape}</g>`;
+    const tf = `translate(${n2(mx + mw / 2)} ${n2(my + mh / 2)}) rotate(${n2(rot)}) scale(${n2(sc)}) translate(${n2(-mw / 2)} ${n2(-mh / 2)})`;
+    const blur = fe ? ` filter='url(#f)'` : '';
+    const defs = fe ? `<filter id='f' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='${n2(fe / 2)}'/></filter>` : '';
+    const W2 = n2(w), H2 = n2(h);
+    const body = inv
+      ? `<defs>${defs}<mask id='m' maskUnits='userSpaceOnUse' x='${-W2}' y='${-H2}' width='${3 * W2}' height='${3 * H2}'><rect x='${-W2}' y='${-H2}' width='${3 * W2}' height='${3 * H2}' fill='white'/><g fill='black'${blur}><g transform='${tf}'>${shape}</g></g></mask></defs><rect width='${W2}' height='${H2}' fill='white' mask='url(#m)'/>`
+      : `<defs>${defs}</defs><g fill='white'${blur}><g transform='${tf}'>${shape}</g></g>`;
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${W2}' height='${H2}' viewBox='0 0 ${W2} ${H2}'>${body}</svg>`;
+    return { image: `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`, position: '0 0', size: '100% 100%' };
+  }
   function applyFrame(el, o, f, scene) {
     const g = p => valueAt(o, p, f);
     const x = g('x'), y = g('y'), w = Math.max(0, g('w')), h = Math.max(0, g('h'));
@@ -253,19 +298,29 @@
     if (sc !== 100) t.push(`scale(${sc / 100})`);
     s.transform = t.join(' ');
     // crop (percent of own width) intersected with an optional mask object's box
-    let L = cl / 100 * w, R = cr / 100 * w, T = 0, B = 0, clip = cl > 0 || cr > 0;
-    if (o.mask && scene) {
-      const m = scene.objects.find(z => z.id === o.mask);
-      if (m) {
+    let L = cl / 100 * w, R = cr / 100 * w, T = 0, B = 0, clip = cl > 0 || cr > 0, boxMask = false, mk = null;
+    const m = o.mask && scene ? scene.objects.find(z => z.id === o.mask) : null;
+    if (m) {
+      const mode = o.maskMode || 'box';
+      if (mode === 'box' && !o.maskInvert && !(+o.maskFeather > 0)) {
         const mx = valueAt(m, 'x', f), my = valueAt(m, 'y', f), mw = valueAt(m, 'w', f), mh = valueAt(m, 'h', f);
         L = Math.max(L, mx - x); T = Math.max(T, my - y); R = Math.max(R, (x + w) - (mx + mw)); B = Math.max(B, (y + h) - (my + mh));
-        clip = true;
-      }
+        clip = true; boxMask = true;
+      } else mk = maskLayers(el, o, m, f, x, y, w, h);
     }
     if (clip) {
-      const pad = o.mask ? 0 : 10000; // crops leave room above/below for text descenders and shadows
-      s.clipPath = `inset(${o.mask ? T + 'px' : -pad + 'px'} ${Math.max(0, R)}px ${o.mask ? B + 'px' : -pad + 'px'} ${Math.max(0, L)}px)`;
+      const pad = boxMask ? 0 : 10000; // crops leave room above/below for text descenders and shadows
+      s.clipPath = `inset(${boxMask ? T + 'px' : -pad + 'px'} ${Math.max(0, R)}px ${boxMask ? B + 'px' : -pad + 'px'} ${Math.max(0, L)}px)`;
     } else s.clipPath = '';
+    const key = mk ? mk.image + mk.position + mk.size : '';
+    if (key !== (el._mk || '')) {
+      el._mk = key;
+      for (const [prop, v] of [['maskImage', mk && mk.image], ['maskPosition', mk && mk.position], ['maskSize', mk && mk.size], ['maskRepeat', mk && 'no-repeat']]) {
+        s[prop] = v || ''; s['webkit' + prop[0].toUpperCase() + prop.slice(1)] = v || '';
+      }
+      s.maskComposite = mk && mk.composite ? 'exclude' : '';
+      s.webkitMaskComposite = mk && mk.composite ? 'xor' : '';
+    }
     if (el._sq) {
       const sp = el.firstElementChild;
       if (!el._nat) { const n = sp.offsetWidth; if (n) el._nat = n; }

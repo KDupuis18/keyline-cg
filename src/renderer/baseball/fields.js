@@ -68,6 +68,7 @@
       F(k + '.color', t.color, 'Primary color (link a Quad to fill it)'); F(k + '.color2', t.color2, 'Secondary color');
       F(k + '.logo', t.logo, 'Logo image');
       F(k + '.runs', S.teamRuns(g, k), 'Runs'); F(k + '.hits', g.hits[k], 'Hits'); F(k + '.errors', g.errors[k], 'Errors');
+      F(k + '.lob', (g.lob && g.lob[k]) || 0, 'Runners left on base');
       F(k + '.batting', yes(k === bk && !g.final && !g.transition), '1 while this team is batting');
       for (let i = 0; i < Math.max(n, 12); i++) F(`${k}.inn${i + 1}`, S.lineCell(g, k, i), i === 0 ? 'Linescore: runs in inning 1 (inn2, inn3…)' : '');
       const sp = S.playerById(t, t.pitcher), sps = sp && st.pit[sp.id];
@@ -101,6 +102,8 @@
     F('bat.stats', bp.id ? `${S.fmtAvg(bp.avg)} AVG · ${S.fmtNum(bp.hr)} HR · ${S.fmtNum(bp.rbi)} RBI` : '');
     F('bat.today', bp.id ? S.todayLine(bt) : '', '2-for-3, HR, 2 RBI');
     F('bat.photo', bp.photo, 'Headshot (photo column in the roster)');
+    F('bat.line', bp.id ? `${b.idx + 1}. ${(bp.last || '').toUpperCase()}` : '', '2. BRYANT (for the at-bat box)');
+    F('bat.short', bp.id ? (bt && bt.pa ? `${bt.h}-${bt.ab}` : S.fmtAvg(bp.avg)) : '', "Today's hits-at bats, or the average before the first at-bat");
     F('bat.abbr', b.team.abbr); F('bat.team', b.team.name); F('bat.color', b.team.color); F('bat.color2', b.team.color2); F('bat.logo', b.team.logo);
 
     const d = S.dueUp(st, bk, 2)[1];
@@ -120,6 +123,8 @@
     F('pit.pc', `P: ${ps ? ps.pitches : 0}`, 'P: 87');
     F('pit.today', pp.id ? S.pitchLine(ps) : '', '6.0 IP, 4 H, 1 R, 2 BB, 7 K');
     F('pit.today.ip', S.ipStr(ps ? ps.outs : 0)); F('pit.today.k', ps ? ps.so : 0); F('pit.today.h', ps ? ps.h : 0); F('pit.today.r', ps ? ps.r : 0); F('pit.today.bb', ps ? ps.bb : 0);
+    F('pit.k', `${ps ? ps.so : 0}K`, 'Strikeouts today, e.g. 3K');
+    F('pit.line', pp.id ? `${(pp.last || '').toUpperCase()}` : '', 'Pitcher name for the at-bat box');
     F('pit.photo', pp.photo);
     F('pit.abbr', pi.team.abbr); F('pit.team', pi.team.name); F('pit.color', pi.team.color); F('pit.color2', pi.team.color2); F('pit.logo', pi.team.logo);
 
@@ -132,12 +137,74 @@
       F(pre + 'pos', x.slot.pos); F(pre + 'order', posOrdinal(x.idx) + ' · ' + x.slot.pos, '1ST · CF');
       F(pre + 'line', td && td.pa ? S.todayLine(td) : `${S.fmtAvg(p.avg)} AVG · ${S.fmtNum(p.hr)} HR`, "Today's line, or season stats before the first at-bat");
     });
+
+    /* ball in play */
+    F('hit.ev', g.hitEv ? `${g.hitEv} MPH` : '', 'Exit velocity'); F('hit.la', g.hitLa ? `${g.hitLa}°` : '', 'Launch angle'); F('hit.dist', g.hitDist ? `${g.hitDist} FT` : '', 'Distance');
+    F('hit.text', hitText(g), 'EXIT VELO 104 MPH · 28° · 412 FT');
+
+    /* last play event (strikeout, walk, homer…) */
+    const ev = g.event || {}, et = ev.team ? st.teams[ev.team] : null;
+    const evB = et && S.playerById(et, ev.batter), evP = ev.team && S.playerById(st.teams[ev.team === 'away' ? 'home' : 'away'], ev.pitcher);
+    F('event.kind', ev.kind || '', 'k, kl, bb, ibb, hbp, 1b, hr…');
+    F('event.label', ev.kind ? EVENT_LABEL(ev) : '', 'STRIKEOUT, STRIKEOUT LOOKING, WALK, HOME RUN…');
+    F('event.short', ev.kind ? (SHORT[ev.kind] || ev.kind.toUpperCase()) : '', 'K, ꓘ (looking), BB, HBP, HR');
+    F('event.text', ev.kind ? eventText(ev, evB, evP) : '', '3RD K FOR FELTNER · BRYANT WALKS');
+    F('event.player', ev.kind ? (/^k/.test(ev.kind) ? evP && evP.last : evB && evB.last) || '' : '', 'Pitcher for strikeouts, batter otherwise');
+    for (const [f, v] of teamBits(et)) F('event.' + f, v);
+
+    /* last time a team scored: drives the RUN SCORES / HOME RUN takeover */
+    const sc = g.score || {}, stm = sc.team ? st.teams[sc.team] : null;
+    F('score.label', sc.team ? scoreLabel(sc) : '', 'RUN SCORES, 2 RUNS SCORE, HOME RUN, GRAND SLAM');
+    F('score.runs', sc.runs || '', 'Runs on the play');
+    for (const [f, v] of teamBits(stm)) F('score.' + f, v, f === 'full' ? 'Team that just scored' : '');
+
+    /* notes */
+    for (const slot of Object.keys(st.notes || {})) F('note.' + slot, noteText(st, slot), `The ${slot} note (type: ${(st.notes[slot] || {}).type})`);
     return out;
+  }
+
+  const SHORT = { k: 'K', kl: 'ꓘ', bb: 'BB', ibb: 'IBB', hbp: 'HBP', '1b': '1B', '2b': '2B', '3b': '3B', hr: 'HR', dp: 'DP', sac: 'SAC', e: 'E', fc: 'FC', out: 'OUT' };
+  const LABELS = { k: 'STRIKEOUT', kl: 'STRIKEOUT LOOKING', bb: 'WALK', ibb: 'INTENTIONAL WALK', hbp: 'HIT BY PITCH', '1b': 'SINGLE', '2b': 'DOUBLE', '3b': 'TRIPLE', hr: 'HOME RUN', dp: 'DOUBLE PLAY', sac: 'SACRIFICE', e: 'ERROR', fc: "FIELDER'S CHOICE", out: 'OUT' };
+  const EVENT_LABEL = ev => (ev.kind === 'hr' && ev.runs === 4 ? 'GRAND SLAM' : LABELS[ev.kind] || ev.kind.toUpperCase());
+  const up = v => String(v || '').toUpperCase();
+  function eventText(ev, b, p) {
+    if (/^k/.test(ev.kind)) return p ? `${up(S.ordinal(ev.k || 1))} K FOR ${up(p.last)}` : 'STRIKEOUT';
+    if (ev.kind === 'hr') return b ? `${up(b.last)} · ${ev.runs === 4 ? 'GRAND SLAM' : ev.runs === 1 ? 'SOLO HOMER' : ev.runs + '-RUN HOMER'}` : 'HOME RUN';
+    if (ev.kind === 'bb' || ev.kind === 'ibb') return b ? `${up(b.last)} WALKS` : 'WALK';
+    if (ev.kind === 'hbp') return b ? `${up(b.last)} HIT BY PITCH` : 'HIT BY PITCH';
+    return (b ? up(b.last) + ' · ' : '') + (LABELS[ev.kind] || '') + (ev.runs ? ` · ${ev.runs} RBI` : '');
+  }
+  const scoreLabel = sc => sc.hr ? (sc.runs === 4 ? 'GRAND SLAM' : 'HOME RUN') : sc.runs > 1 ? `${sc.runs} RUNS SCORE` : 'RUN SCORES';
+  const teamBits = t => [['team', t ? t.name : ''], ['full', t ? [t.city, t.name].filter(Boolean).join(' ') : ''], ['abbr', t ? t.abbr : ''], ['color', t ? t.color : ''], ['color2', t ? t.color2 : ''], ['logo', t ? t.logo : '']];
+  function hitText(g) {
+    const bits = [g.hitEv && `EXIT VELO ${g.hitEv} MPH`, g.hitLa && `${g.hitLa}°`, g.hitDist && `${g.hitDist} FT`].filter(Boolean);
+    return bits.join(' · ');
+  }
+  /* Note types: each makes its text from the game, except "custom". */
+  const NOTE_TYPES = [
+    ['pitch', 'Pitch summary (SLIDER · 88 MPH)'], ['launch', 'Batted ball (exit velo · angle · distance)'], ['atbat', 'At bat (2. BRYANT · 1-2, 2B)'],
+    ['pitchcount', 'Pitch count (FELTNER · 34 P · 3K)'], ['pitcher', "Pitcher's line today"], ['dueup', 'Due up (three names)'],
+    ['runners', 'Runners and outs'], ['lastplay', 'Last play'], ['custom', 'Custom text']];
+  function noteText(st, slot) {
+    const n = (st.notes || {})[slot]; if (!n) return '';
+    const g = st.game, b = S.currentBatter(st), p = S.currentPitcher(st), bp = b.player, pp = p.player, ps = pp && st.pit[pp.id];
+    switch (n.type) {
+      case 'custom': return n.text || '';
+      case 'pitch': return g.pitchMph ? [up(g.pitchType), g.pitchMph + ' MPH'].filter(Boolean).join(' · ') : '';
+      case 'launch': return hitText(g);
+      case 'atbat': return bp ? `${b.idx + 1}. ${up(bp.last)} · ${S.todayLine(st.today[bp.id]).toUpperCase()}` : '';
+      case 'pitchcount': return pp ? `${up(pp.last)} · ${ps ? ps.pitches : 0} P · ${ps ? ps.so : 0}K` : '';
+      case 'pitcher': return pp ? `${up(pp.last)} · ${S.pitchLine(ps).toUpperCase()}` : '';
+      case 'dueup': { const k = S.dueUpKey(g); return 'DUE UP: ' + S.dueUp(st, k, 3).map(d => up(d.player && d.player.last)).join(', '); }
+      case 'runners': return `${runnersText(g.bases).toUpperCase()} · ${g.outs} OUT${g.outs === 1 ? '' : 'S'}`;
+      case 'lastplay': return up(g.lastPlay);
+      default: return n.text || '';
+    }
   }
 
   function rows(st) { return [['Field', 'Value', 'About'], ...build(st)]; }
   const link = field => ({ src: SOURCE_ID, row: 'Field=' + field, col: 'Value' });
   const fieldOf = l => { const m = l && l.src === SOURCE_ID && String(l.row || '').match(/^Field\s*=\s*(.+)$/i); return m ? m[1].trim() : ''; };
 
-  return { SOURCE_ID, build, rows, link, fieldOf, basesImg, outsImg };
+  return { SOURCE_ID, build, rows, link, fieldOf, basesImg, outsImg, noteText, NOTE_TYPES };
 });

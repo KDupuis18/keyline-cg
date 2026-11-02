@@ -67,17 +67,41 @@ function freshGame() {
   return {
     inning: 1, half: 'top', balls: 0, strikes: 0, outs: 0, bases: [false, false, false],
     runs: { away: [0], home: [0] }, hits: { away: 0, home: 0 }, errors: { away: 0, home: 0 },
-    final: false, transition: false, lastPlay: '', pa: 0, pitchMph: '', pitchType: ''
+    final: false, transition: false, lastPlay: '', pa: 0, pitchMph: '', pitchType: '',
+    lob: { away: 0, home: 0 }, hitEv: '', hitLa: '', hitDist: '',
+    event: null, score: null // last play event, last time a team scored (both drive automatic graphics)
   };
 }
 function freshAuto() {
-  return { batterTake: '', batterSecs: 7, pitchTake: '', pitchSecs: 6 };
+  return {
+    batterTake: '', batterSecs: 7, pitchTake: '', pitchSecs: 6,
+    eventTake: '', eventSecs: 4, eventKinds: 'k,kl,bb,ibb,hbp',
+    runTake: '', hrTake: '', runSecs: 5, holdMs: 500, delayMs: 0
+  };
+}
+/* The bug is several takes switched on and off from Bug Control: one part per take, each with a key. */
+function freshBug() {
+  return {
+    parts: [
+      { id: 'bug', label: 'Bug', take: '', key: 'F1' },
+      { id: 'scoreboard', label: 'Scoreboard', take: '', key: 'F6' },
+      { id: 'box', label: 'At-bat box', take: '', key: 'F7' },
+      { id: 'top', label: 'Top note', take: '', key: 'F8' },
+      { id: 'bottom', label: 'Bottom note', take: '', key: 'F9' },
+      { id: 'flow', label: 'Game flow', take: '', key: 'F12' }
+    ],
+    outKey: 'F2'
+  };
+}
+/* Notes fill themselves from the game by type, or show your own text (type "custom"). */
+function freshNotes() {
+  return { top: { type: 'launch', text: '' }, bottom: { type: 'pitch', text: '' }, flow: { type: 'lastplay', text: '' } };
 }
 function newState() {
   return {
     v: 1,
     meta: { title: 'Gulls at Foxes', venue: 'Ridgeview Park', accent: '#f3b61f' },
-    teams: sampleTeams(), game: freshGame(), today: {}, pit: {}, auto: freshAuto()
+    teams: sampleTeams(), game: freshGame(), today: {}, pit: {}, auto: freshAuto(), bug: freshBug(), notes: freshNotes()
   };
 }
 
@@ -112,6 +136,7 @@ function addRuns(st, k, n) {
 function resetCount(g) { g.balls = 0; g.strikes = 0; }
 function endHalf(st) {
   const g = st.game;
+  g.lob[S.battingKey(g)] += g.bases.filter(Boolean).length; // runners left on base
   g.outs = 0; g.bases = [false, false, false]; resetCount(g);
   if (g.half === 'top') g.half = 'bottom'; else { g.half = 'top'; g.inning++; }
   ensureInning(g);
@@ -120,7 +145,7 @@ function endHalf(st) {
 
 const LABEL = {
   '1b': 'SINGLE', '2b': 'DOUBLE', '3b': 'TRIPLE', hr: 'HOME RUN', bb: 'WALK', ibb: 'INTENTIONAL WALK', hbp: 'HIT BY PITCH',
-  k: 'STRIKEOUT', out: 'OUT', dp: 'DOUBLE PLAY', sac: 'SACRIFICE', e: 'REACHED ON ERROR', fc: "FIELDER'S CHOICE"
+  k: 'STRIKEOUT', kl: 'STRIKEOUT LOOKING', out: 'OUT', dp: 'DOUBLE PLAY', sac: 'SACRIFICE', e: 'REACHED ON ERROR', fc: "FIELDER'S CHOICE"
 };
 const IN_PLAY = new Set(['1b', '2b', '3b', 'hr', 'out', 'dp', 'sac', 'e', 'fc']);
 
@@ -129,6 +154,8 @@ const IN_PLAY = new Set(['1b', '2b', '3b', 'hr', 'out', 'dp', 'sac', 'e', 'fc'])
 function plateResult(st, kind, opts = {}) {
   const g = st.game;
   if (!LABEL[kind]) throw new Error('Unknown result: ' + kind);
+  const event = kind; // 'kl' is scored as a strikeout but announced as "looking"
+  if (kind === 'kl') kind = 'k';
   const bk = S.battingKey(g), fk = S.other(bk), team = st.teams[bk];
   const slot = team.lineup[team.up];
   const b = bat(st, slot ? slot.id : NOBODY);
@@ -174,7 +201,11 @@ function plateResult(st, kind, opts = {}) {
   p.bf++; p.outs += outs; p.r += runs;
   addRuns(st, bk, runs);
   g.outs += outs;
-  g.lastPlay = (slot ? S.fullName(S.playerById(team, slot.id)) + ': ' : '') + LABEL[kind] + (runs ? ' — ' + runs + (runs > 1 ? ' runs score' : ' run scores') : '');
+  const batter = slot ? S.playerById(team, slot.id) : null;
+  g.lastPlay = (batter ? S.fullName(batter) + ': ' : '') + LABEL[event] + (runs ? ' — ' + runs + (runs > 1 ? ' runs score' : ' run scores') : '');
+  const pp = S.playerById(st.teams[fk], st.teams[fk].pitcher);
+  g.event = { n: ((g.event && g.event.n) || 0) + 1, kind: event, team: bk, batter: batter ? batter.id : '', pitcher: pp ? pp.id : '', runs, k: p.so, hr: b.hr };
+  if (runs > 0) g.score = { n: ((g.score && g.score.n) || 0) + 1, team: bk, runs, hr: kind === 'hr' };
   resetCount(g);
   if (team.lineup.length) team.up = (team.up + 1) % team.lineup.length;
   g.pa = (g.pa || 0) + 1; // the console watches this to fire the auto batter graphic
@@ -187,6 +218,7 @@ function pitch(st, kind) {
   const g = st.game;
   const p = pit(st, st.teams[S.fieldingKey(g)].pitcher || NOBODY);
   g.transition = false;
+  g.hitEv = g.hitLa = g.hitDist = '';
   switch (kind) {
     case 'ball':
       p.pitches++; p.balls++; g.balls++;
@@ -194,7 +226,7 @@ function pitch(st, kind) {
       break;
     case 'called': case 'swinging': case 'strike':
       p.pitches++; p.strikes++; g.strikes++;
-      if (g.strikes >= 3) return plateResult(st, 'k', { pitch: false });
+      if (g.strikes >= 3) return plateResult(st, kind === 'called' ? 'kl' : 'k', { pitch: false });
       break;
     case 'foul':
       p.pitches++; p.strikes++; if (g.strikes < 2) g.strikes++;
@@ -205,7 +237,7 @@ function pitch(st, kind) {
 
 /* ---------- actions ---------- */
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const GAME_ACTIONS = new Set(['pitch', 'result', 'count', 'outs', 'base', 'runs', 'hits', 'errors', 'runnerOut', 'batter', 'endHalf', 'inning', 'final', 'pitcher', 'lineup', 'team', 'player', 'addPlayer', 'removePlayer', 'roster', 'resetGame', 'meta', 'pitchInfo']);
+const GAME_ACTIONS = new Set(['pitch', 'result', 'count', 'outs', 'base', 'runs', 'hits', 'errors', 'runnerOut', 'batter', 'endHalf', 'inning', 'final', 'pitcher', 'lineup', 'team', 'player', 'addPlayer', 'removePlayer', 'roster', 'resetGame', 'meta', 'pitchInfo', 'hitInfo', 'lob']);
 
 /* Mutates st. Returns true when the action changed game data (so the console keeps an undo snapshot). */
 function apply(st, a) {
@@ -234,6 +266,7 @@ function apply(st, a) {
     case 'runs': {
       const k = side(a.team || S.battingKey(g)), d = +a.delta || 0;
       addRuns(st, k, d);
+      if (d > 0) g.score = { n: ((g.score && g.score.n) || 0) + 1, team: k, runs: d, hr: false };
       if (k === S.battingKey(g) && d) {
         const p = pit(st, st.teams[S.other(k)].pitcher || NOBODY); p.r = Math.max(0, p.r + d);
       }
@@ -310,6 +343,24 @@ function apply(st, a) {
       st.teams.away.up = 0; st.teams.home.up = 0;
       break;
 
+    case 'hitInfo': // exit velocity, launch angle, distance of the last ball in play
+      if (a.ev != null) g.hitEv = String(a.ev);
+      if (a.la != null) g.hitLa = String(a.la);
+      if (a.dist != null) g.hitDist = String(a.dist);
+      break;
+    case 'lob': { const k = side(a.team); g.lob[k] = Math.max(0, g.lob[k] + (+a.delta || 0)); break; }
+    case 'note': {
+      const n = st.notes[a.slot]; if (!n) throw new Error('note slot must be ' + Object.keys(st.notes).join(', '));
+      if (a.noteType != null) n.type = String(a.noteType);
+      if (a.text != null) n.text = String(a.text);
+      break;
+    }
+    case 'bugPart': {
+      const part = st.bug.parts.find(x => x.id === a.id); if (!part) throw new Error('No bug part ' + a.id);
+      for (const f of ['take', 'key', 'label']) if (a[f] != null) part[f] = String(a[f]);
+      break;
+    }
+    case 'bugOutKey': st.bug.outKey = String(a.key || ''); break;
     case 'pitchInfo': // speed / type of the last pitch, for a pitch-speed graphic
       if (a.mph != null) g.pitchMph = String(a.mph);
       if (a.pitch != null) g.pitchType = String(a.pitch);
@@ -319,6 +370,11 @@ function apply(st, a) {
       if (a.batterSecs != null) st.auto.batterSecs = clamp(+a.batterSecs || 0, 0, 120);
       if (a.pitchTake != null) st.auto.pitchTake = String(a.pitchTake);
       if (a.pitchSecs != null) st.auto.pitchSecs = clamp(+a.pitchSecs || 0, 0, 120);
+      for (const f of ['eventTake', 'eventKinds', 'runTake', 'hrTake']) if (a[f] != null) st.auto[f] = String(a[f]);
+      if (a.eventSecs != null) st.auto.eventSecs = clamp(+a.eventSecs || 0, 0, 120);
+      if (a.runSecs != null) st.auto.runSecs = clamp(+a.runSecs || 0, 0, 120);
+      if (a.holdMs != null) st.auto.holdMs = clamp(+a.holdMs || 0, 0, 10000);
+      if (a.delayMs != null) st.auto.delayMs = clamp(+a.delayMs || 0, 0, 60000);
       break;
     default: throw new Error('Unknown action: ' + a.type);
   }
@@ -332,6 +388,10 @@ function normalize(st) {
   st.meta = Object.assign({}, d.meta, st.meta);
   st.game = Object.assign(freshGame(), st.game);
   st.auto = Object.assign(freshAuto(), st.auto);
+  const bug = freshBug(); st.bug = Object.assign(bug, st.bug);
+  for (const d of freshBug().parts) if (!st.bug.parts.some(x => x.id === d.id)) st.bug.parts.push(d);
+  st.notes = Object.assign(freshNotes(), st.notes);
+  st.game.lob = Object.assign({ away: 0, home: 0 }, st.game.lob);
   delete st.gfx; delete st.theme;
   for (const k of ['away', 'home']) {
     const t = st.teams[k] = Object.assign({ name: k, city: '', abbr: k.slice(0, 3).toUpperCase(), color: '#333333', color2: '#ffffff', logo: '', record: '', roster: [], lineup: [], pitcher: '', up: 0 }, st.teams[k]);

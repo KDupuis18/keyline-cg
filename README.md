@@ -43,7 +43,11 @@ Installers built by GitHub Actions are ad-hoc signed, so you skip that command: 
   - **Video**: MP4/MOV, or **WebM with alpha** for transparency.
 - **Shadow / glow on every object.** Settings: color, opacity, softness, distance and angle (45° = down-right). Distance 0 with a bright color makes a glow. Text also gets an **outline**.
 - **Shapes:** rectangle, pill, ellipse, triangle, diamond, chevron, arrow, parallelogram, tab.
-- **Masks:** an object can be clipped to another object's box. Animate the mask for reveals.
+- **Masks:** an object can be clipped to another object, and you can animate the mask for wipes and reveals. In the Object Inspector, **Mask uses** picks how:
+  - **Its box:** a plain rectangle, the fastest option.
+  - **Its shape, rotation and scale:** follows a chevron, ellipse, parallelogram, rotated quad and so on.
+  - **The image's transparency:** clips to a logo or other image's alpha.
+  - **Invert and Feather:** Invert shows the object everywhere except the mask. Feather softens the edge.
 - **Keyframes:** Position, Size, Alpha, Scale, Rotation Z, **Rotation X/Y (3D flips)** and Crop.
   - **Auto-key** (`A`), **Key** (`K`).
   - Frame-by-frame with `,` and `.`.
@@ -67,9 +71,15 @@ The game is saved inside the project. Every pitch and play updates the built-in 
 - **Results:** 1B, 2B, 3B, HR, out, K, DP, SAC, BB, IBB, HBP, E, FC and runner out. Runners move by the usual defaults. Click a base, or use the run / hit / error buttons, for anything unusual.
 - **Innings:** three outs ends the half-inning. The inning reads `MID 3` / `END 3` until the next pitch.
 - **Tracked for the game:** the linescore by inning, each batter's line (`2-for-3, HR, 2 RBI`), and each pitcher's line and pitch count.
-- **Keyboard:** `B` `S` `W` `F` for pitches. `1` `2` `3` `H` `O` `K` `D` for results.
+- **Keyboard:** `B` `S` `W` `F` for pitches. `1` `2` `3` `H` `O` `K` `D` for results. `Shift+K` scores a strikeout looking (ꓘ). A called third strike is scored as looking automatically.
+- **Also tracked:** LOB (runners left on base), and batted-ball data (exit velocity, launch angle, distance) entered after a ball in play.
 - **Undo play:** Ctrl/Cmd+Z in this mode undoes scoring only. In Layout and Sequence it undoes design changes only, and never rewinds the game.
-- **Graphics:** the Graphics list takes and clears rundown takes. The Program monitor is the same one Sequence mode uses.
+- **Bug control:** the bug is several takes on their own layers. Each one turns on and off with its own key, and these keys work even while you're typing in a field.
+  - **Bug In** (`F1`) and **Bug Out** (`F2`, every part).
+  - Scoreboard (`F6`), at-bat box (`F7`), top note (`F8`), bottom note (`F9`) and game flow (`F12`).
+  - Change any key, or which take a part uses, in Graphics setup.
+- **Notes:** the top, bottom and game-flow notes fill themselves by type: pitch summary, batted ball, at bat, pitch count, pitcher's line, due up, runners and outs, last play. Choose **Custom** to type your own text.
+- **All graphics:** takes and clears any rundown take. The Program monitor is the same one Sequence mode uses.
 
 **Teams & rosters:**
 - City, name, abbreviation, record, colors and logo for each team.
@@ -77,19 +87,28 @@ The game is saved inside the project. Every pitch and play updates the built-in 
 - **Import CSV:** columns in any order: `num, first, last` (or `name`), `pos, bats, throws, avg, hr, rbi, ops, w, l, era, so, whip, photo`.
 
 **Graphics setup & fields:**
-- **Starter baseball graphics:** a scorebug, batter and pitcher lower thirds, due up, linescore, pitch speed, and both starting lineups. They're ordinary scenes, so redesign them freely in Layout mode.
-- **Automatic graphics:** a take that fires for each new batter, and one for pitch speed (the **SHOW** button). Each can clear itself after N seconds.
+- **Starter baseball graphics:** they're ordinary scenes, so redesign them freely in Layout mode.
+  - The scorebug, at-bat box, top and bottom notes, and game flow bar.
+  - Batter and pitcher lower thirds, due up, linescore and pitch speed.
+  - A play popup, and a RUN SCORES / HOME RUN takeover revealed by an animated shape mask.
+  - Both starting lineups.
+- **Automatic graphics:** each can clear itself after N seconds.
+  - **New batter:** a take fires each time someone new comes up.
+  - **Pitch speed:** fires when you press the **SHOW** button.
+  - **Play popup:** fires for the results you tick (K, ꓘ, BB, HBP…).
+  - **Run scores / Home run:** a takeover that covers the bug. The bug's score waits **Score hold** ms, so the number changes underneath the takeover instead of before it.
+- **Data delay:** every graphic follows the game this many ms later, to match delayed video.
 - **Field reference:** every live field with its current value.
 
 **Linking your own designs:** in Sequence › Template Data, press **DL** on a published object, choose **Baseball (live game)**, and type a field name. Some examples:
-- Text: `bat.name`, `bat.today`, `pit.pc`, `count`, `inning.label`, `away.runs`, `home.inn7`, `due1.last`, `away.lu3.short`.
+- Text: `bat.name`, `bat.today`, `bat.line`, `pit.pc`, `pit.k`, `count`, `inning.label`, `away.runs`, `home.inn7`, `away.lob`, `due1.last`, `away.lu3.short`, `note.top`, `hit.text`, `event.label` / `event.short` / `event.text` (last play), `score.label` / `score.full` (team that just scored).
 - Image: `bases.img` (runner diamond), `outs.img` (out lights), `away.logo`, `bat.photo`.
 - Quad: `away.color` or any team color. A linked quad takes the color as its fill.
 - On/off: set a link to **Show only when set** (or **Show only when empty**) to switch an object on or off, for example a runner light linked to `base1`, or a bat arrow linked to `away.batting`.
 
 **Control:**
-- **RossTalk:** `BB pitch kind=ball`, `BB result kind=hr`, `BB runs team=home delta=1`, `BB undo`.
-- **HTTP:** `/api/baseball/pitch?kind=ball`, `/api/baseball/result?kind=1b`, `/api/baseball/undo`. `/api/baseball/state` returns every live field as JSON.
+- **RossTalk:** `BB pitch kind=ball`, `BB result kind=hr`, `BB runs team=home delta=1`, `BB part id=box` (toggle a bug part), `BB bugout`, `BB undo`.
+- **HTTP:** `/api/baseball/pitch?kind=ball`, `/api/baseball/result?kind=1b`, `/api/baseball/part?id=scoreboard`, `/api/baseball/bugout`, `/api/baseball/undo`. `/api/baseball/state` returns every live field as JSON.
 
 ### Clocks & timers
 **Clocks** button. Make named timers (GAME, SHOT, …) that count down or up:
@@ -173,7 +192,7 @@ npm run test:e2e
 
 - `npm test` runs unit tests: DataLinq, RossTalk/HTTP, and the NDI FFI against a fake libndi.
 - `npm test` also runs the baseball scoring engine and live-field tests.
-- `npm run test:e2e` drives the full app on Linux with Xvfb: 47 scenarios covering 3D text, timers, channels, NDI fill+key, media, Excel/JSON, and undo, plus 21 Baseball mode scenarios (scoring, live-linked graphics, automatic takes, undo separation, RossTalk/HTTP).
+- `npm run test:e2e` drives the full app on Linux with Xvfb: 47 scenarios covering 3D text, timers, channels, NDI fill+key, media, Excel/JSON, and undo, plus 30 Baseball mode scenarios (scoring, live-linked graphics, bug control keys, notes, play popups, the run takeover with score hold, data delay, LOB, masks, undo separation, RossTalk/HTTP).
 
 ```bash
 npm run dist:win

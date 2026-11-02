@@ -35,8 +35,8 @@
               <button class="bb-b foul" data-act='{"type":"pitch","kind":"foul"}'>FOUL<kbd>F</kbd></button>
             </div>
             <div class="bb-res">
-              ${[['1b', '1B', 'hit', '1'], ['2b', '2B', 'hit', '2'], ['3b', '3B', 'hit', '3'], ['hr', 'HR', 'hr', 'H'], ['out', 'OUT', 'out', 'O'], ['k', 'K', 'out', 'K'], ['dp', 'DP', 'out', 'D'], ['sac', 'SAC', 'out'], ['bb', 'BB', 'on'], ['ibb', 'IBB', 'on'], ['hbp', 'HBP', 'on'], ['e', 'E', 'on'], ['fc', 'FC', 'on']]
-                .map(([k, l, c, key]) => `<button class="bb-b ${c}" data-res="${k}">${l}${key ? `<kbd>${key}</kbd>` : ''}</button>`).join('')}
+              ${[['1b', '1B', 'hit', '1'], ['2b', '2B', 'hit', '2'], ['3b', '3B', 'hit', '3'], ['hr', 'HR', 'hr', 'H'], ['out', 'OUT', 'out', 'O'], ['k', 'K', 'out', 'K'], ['kl', 'ꓘ', 'out', '⇧K', 'Strikeout looking'], ['dp', 'DP', 'out', 'D'], ['sac', 'SAC', 'out'], ['bb', 'BB', 'on'], ['ibb', 'IBB', 'on'], ['hbp', 'HBP', 'on'], ['e', 'E', 'on'], ['fc', 'FC', 'on']]
+                .map(([k, l, c, key, tip]) => `<button class="bb-b ${c}" data-res="${k}"${tip ? ` title="${tip}"` : ''}>${l}${key ? `<kbd>${key}</kbd>` : ''}</button>`).join('')}
               <button class="bb-b out wide" data-act='{"type":"runnerOut"}' title="Caught stealing, pickoff… (the at-bat continues)">RUNNER OUT</button>
             </div>
             <p class="bb-note">Runners move by the usual defaults. Click a base or use the run buttons for anything unusual.</p>
@@ -49,13 +49,19 @@
           <section class="panel" style="flex:none"><div class="ph">Batting order <span class="hint" id="bbOrderTeam"></span></div><div class="pb pad bb-order" id="bbOrder"></div></section>
         </div>
         <div class="col">
-          <section class="panel" style="flex:1"><div class="ph">Graphics<span class="sp"></span><span class="hint">Takes from the rundown</span></div><div class="pb" id="bbTakes"></div></section>
+          <section class="panel" style="flex:none"><div class="ph">Bug control<span class="sp"></span><span class="hint">keys work anywhere in this mode</span></div><div class="pb pad" id="bbBug"></div></section>
+          <section class="panel" style="flex:none"><div class="ph">Notes<span class="sp"></span><span class="hint">fill themselves from the game</span></div><div class="pb pad" id="bbNotes"></div></section>
+          <section class="panel" style="flex:none"><div class="ph">Batted ball</div><div class="pb pad">
+            <div class="bb-row" style="margin:0"><input class="in" id="bbEv" type="number" placeholder="Exit velo" style="width:76px"><input class="in" id="bbLa" type="number" placeholder="Angle" style="width:60px"><input class="in" id="bbDist" type="number" placeholder="Feet" style="width:62px"><button class="tbtn" id="bbHitGo" title="Sets hit.ev / hit.la / hit.dist / hit.text (cleared by the next pitch)">SET</button></div>
+            <p class="bb-note" id="bbHitNote"></p>
+          </div></section>
           <section class="panel" style="flex:none"><div class="ph">Pitch speed</div><div class="pb pad">
             <div class="bb-row" style="margin:0"><input class="in" id="bbMph" type="number" min="40" max="110" placeholder="MPH" style="width:70px">
               <select class="in" id="bbPitchType"><option value="">(type)</option>${['4-Seam', '2-Seam', 'Sinker', 'Cutter', 'Slider', 'Sweeper', 'Curveball', 'Changeup', 'Splitter', 'Knuckleball'].map(x => `<option>${x}</option>`).join('')}</select>
               <button class="tbtn take" id="bbMphGo" title="Sets pitch.mph / pitch.type and takes the pitch speed graphic">SHOW</button></div>
             <p class="bb-note" id="bbMphNote"></p>
           </div></section>
+          <section class="panel" style="flex:1;min-height:160px"><div class="ph">All graphics<span class="sp"></span><span class="hint">Takes from the rundown</span></div><div class="pb" id="bbTakes"></div></section>
         </div>
       </div>
       <div class="bb-view" id="bbTeams" hidden></div>
@@ -73,6 +79,13 @@
       root.querySelector('#bbMph').select();
     };
     root.querySelector('#bbMphGo').onclick = go;
+    const hit = () => {
+      const v = id => root.querySelector(id).value;
+      if (!v('#bbEv') && !v('#bbLa') && !v('#bbDist')) return ctx.toast('Type an exit velocity, angle or distance first');
+      act({ type: 'hitInfo', ev: v('#bbEv'), la: v('#bbLa'), dist: v('#bbDist') });
+    };
+    root.querySelector('#bbHitGo').onclick = hit;
+    ['#bbEv', '#bbLa', '#bbDist'].forEach(id => root.querySelector(id).addEventListener('keydown', ev => { if (ev.key === 'Enter') hit(); }));
     root.querySelector('#bbMph').addEventListener('keydown', ev => { if (ev.key === 'Enter') go(); });
   }
 
@@ -90,6 +103,9 @@
     if (set) return act(JSON.parse(set.dataset.set));
     const tk = ev.target.closest('[data-take]');
     if (tk) { const t = ctx.findTake(tk.dataset.take); if (t) (tk.dataset.on ? ctx.out(t) : ctx.take(t)); return; }
+    const part = ev.target.closest('[data-part]');
+    if (part) { ctx.togglePart(part.dataset.part); return; }
+    if (ev.target.closest('[data-bugout]')) { ctx.bugOut(); return; }
     const ed = ev.target.closest('[data-edit]');
     if (ed) return ctx.openLayout(ed.dataset.edit);
     const mv = ev.target.closest('[data-move]');
@@ -123,6 +139,15 @@
     if (el.dataset.lupos != null) { const s = ctx.get().teams[k].lineup[+el.dataset.lupos]; return act({ type: 'lineup', team: k, index: +el.dataset.lupos, id: s.id, pos: el.value.toUpperCase() }); }
     if (el.dataset.meta) return act({ type: 'meta', fields: { [el.dataset.meta]: el.value } });
     if (el.dataset.auto) return act({ type: 'auto', [el.dataset.auto]: el.value });
+    if (el.dataset.kind) {
+      const kinds = [...mounted.querySelectorAll('[data-kind]')].filter(x => x.checked).map(x => x.dataset.kind).join(',');
+      return act({ type: 'auto', eventKinds: kinds });
+    }
+    if (el.dataset.partTake) return act({ type: 'bugPart', id: el.dataset.partTake, take: el.value });
+    if (el.dataset.partKey) return act({ type: 'bugPart', id: el.dataset.partKey, key: el.value.trim() });
+    if (el.dataset.outkey != null) return act({ type: 'bugOutKey', key: el.value.trim() });
+    if (el.dataset.noteType) return act({ type: 'note', slot: el.dataset.noteType, noteType: el.value });
+    if (el.dataset.noteText) return act({ type: 'note', slot: el.dataset.noteText, text: el.value });
     if (el.dataset.logo) {
       const f = el.files[0]; if (!f) return;
       if (f.size > 1.5e6) return ctx.toast('That logo is over 1.5 MB. Use a smaller PNG or SVG.');
@@ -147,11 +172,12 @@
       return `<tr style="${tv(t)}"><td class="bb-tm"><i></i>${e(t.abbr)}${k === bk && !g.final ? ' <span class="bb-up">●</span>' : ''}</td>
         <td class="bb-big">${S.teamRuns(g, k)}</td><td>${pm('runs', 1, '+1')}${pm('runs', -1, '−1')}</td>
         <td class="bb-n">${g.hits[k]}</td><td>${pm('hits', 1, '+')}${pm('hits', -1, '−')}</td>
-        <td class="bb-n">${g.errors[k]}</td><td>${pm('errors', 1, '+')}${pm('errors', -1, '−')}</td></tr>`;
+        <td class="bb-n">${g.errors[k]}</td><td>${pm('errors', 1, '+')}${pm('errors', -1, '−')}</td>
+        <td class="bb-n">${(g.lob && g.lob[k]) || 0}</td><td>${pm('lob', 1, '+')}${pm('lob', -1, '−')}</td></tr>`;
     };
     const n = Math.max(9, S.lastInning(g));
     const ls = `<table class="bb-ls"><tr><th></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join('')}</tr>${['away', 'home'].map(k => `<tr><td>${e(st.teams[k].abbr)}</td>${Array.from({ length: n }, (_, i) => `<td>${S.lineCell(g, k, i)}</td>`).join('')}</tr>`).join('')}</table>`;
-    mounted.querySelector('#bbScore').innerHTML = `<table class="bb-st"><tr><th></th><th>R</th><th></th><th>H</th><th></th><th>E</th><th></th></tr>${row('away')}${row('home')}</table>${ls}`;
+    mounted.querySelector('#bbScore').innerHTML = `<table class="bb-st"><tr><th></th><th>R</th><th></th><th>H</th><th></th><th>E</th><th></th><th title="Left on base">LOB</th><th></th></tr>${row('away')}${row('home')}</table>${ls}`;
   }
   function renderSitu(st) {
     const g = st.game, is = S.inningState(g);
@@ -185,6 +211,25 @@
       return `<button class="mini${i === t.up ? ' on' : ''}" data-act='{"type":"batter","index":${i}}'><b>${i + 1}</b> ${e(pl.last || '?')}<span>${td && td.pa ? td.h + '-' + td.ab : e(s.pos)}</span></button>`;
     }).join('');
   }
+  function renderBug(st) {
+    const parts = st.bug.parts.map(p => Object.assign({}, p, ctx.partState(p)));
+    const bug = parts.find(p => p.id === 'bug') || parts[0];
+    const btn = (p, big) => `<button class="${big ? 'tbtn bb-bugin' : 'mini bb-part'}${p.onAir ? ' on air' : ''}${p.take ? '' : ' unset'}" data-part="${e(p.id)}" title="${p.take ? e(p.take.name) + (p.onAir ? ' · on air, press to take it off' : '') : 'No take chosen yet (Graphics setup)'}">${e(big ? (p.onAir ? 'BUG ON' : 'BUG IN') : p.label)}${p.key ? ` <kbd>${e(p.key)}</kbd>` : ''}</button>`;
+    mounted.querySelector('#bbBug').innerHTML = `<div class="bb-bugrow">${btn(bug, true)}<button class="tbtn bb-bugout" data-bugout="1" title="Take every bug part off">BUG OUT${st.bug.outKey ? ` <kbd>${e(st.bug.outKey)}</kbd>` : ''}</button></div>
+      <div class="bb-parts">${parts.filter(p => p !== bug).map(p => btn(p)).join('')}</div>`;
+  }
+  function renderNotes(st) {
+    const box = mounted.querySelector('#bbNotes');
+    if (focusedIn(box)) return;
+    const types = ctx.noteTypes;
+    box.innerHTML = Object.keys(st.notes).map(slot => {
+      const n = st.notes[slot], part = st.bug.parts.find(p => p.id === slot), ps = part && ctx.partState(part);
+      return `<div class="bb-note-row"><b>${e(slot[0].toUpperCase() + slot.slice(1))}</b>
+        <select class="in" data-note-type="${slot}">${types.map(([v, l]) => `<option value="${v}"${v === n.type ? ' selected' : ''}>${e(l)}</option>`).join('')}</select>
+        ${part ? `<button class="mini bb-part${ps.onAir ? ' on air' : ''}" data-part="${e(part.id)}">${ps.onAir ? 'OUT' : 'SHOW'}${part.key ? ` <kbd>${e(part.key)}</kbd>` : ''}</button>` : ''}</div>
+        ${n.type === 'custom' ? `<input class="in bb-note-text" data-note-text="${slot}" value="${e(n.text)}" placeholder="Type the note…">` : `<div class="bb-note-now">${e(ctx.noteText(slot)) || '<i>(nothing yet)</i>'}</div>`}`;
+    }).join('');
+  }
   function renderTakes(st) {
     const list = ctx.takes();
     const live = list.filter(x => x.linked), rest = list.filter(x => !x.linked);
@@ -193,6 +238,7 @@
     mounted.querySelector('#bbTakes').innerHTML = (live.length ? `<table class="grid"><colgroup><col style="width:46px"><col><col style="width:62px"></colgroup><tbody>${live.map(row).join('')}</tbody></table>`
       : `<div class="pb pad"><p class="bb-note">No takes are linked to the game yet.</p><button class="tbtn on" data-bb="starter">Add starter baseball graphics</button><p class="bb-note">Adds a scorebug, batter and pitcher lower thirds, due up, linescore, pitch speed and both lineups. They're ordinary scenes you can redesign in Layout mode.</p></div>`)
       + (rest.length ? `<div class="ph sub">Other takes</div><table class="grid"><colgroup><col style="width:46px"><col><col style="width:62px"></colgroup><tbody>${rest.map(row).join('')}</tbody></table>` : '');
+    mounted.querySelector('#bbHitNote').textContent = st.game.hitEv || st.game.hitLa || st.game.hitDist ? 'Now: ' + [st.game.hitEv && st.game.hitEv + ' MPH', st.game.hitLa && st.game.hitLa + '°', st.game.hitDist && st.game.hitDist + ' ft'].filter(Boolean).join(' · ') : 'Shows in hit.text and the "Batted ball" note until the next pitch.';
     const pt = ctx.findTake(st.auto.pitchTake);
     mounted.querySelector('#bbMphNote').textContent = pt ? `Shows ${pt.name}${st.auto.pitchSecs ? ` for ${st.auto.pitchSecs} s` : ''}.` : 'No pitch speed graphic chosen (Graphics setup).';
   }
@@ -251,10 +297,21 @@
         <span class="fl">Runner / out lights</span><span class="krow"><input type="color" data-meta="accent" value="${e(st.meta.accent || '#f3b61f')}"><span class="bb-note">Color of lit bases and outs in bases.img and outs.img</span></span>
         <span class="fl">New game</span><span><button class="tbtn" data-bb="reset">New game (keep rosters)</button></span>
       </div></div></section>
+      <section class="panel" style="flex:none"><div class="ph">Bug parts<span class="sp"></span><span class="hint">each part is a take on its own layer; its key switches it on and off</span></div><div class="pb pad">
+        <div class="fgrid" style="grid-template-columns:150px minmax(0,1fr) 90px">
+        ${st.bug.parts.map(p => `<span class="fl">${e(p.label)}</span><select class="in" data-part-take="${e(p.id)}"><option value="">(none)</option>${takes.map(x => `<option value="${e(x.t.id)}"${x.t.id === p.take ? ' selected' : ''}>${String(x.t.num).padStart(4, '0')} ${e(x.t.name)}</option>`).join('')}</select><input class="in" data-part-key="${e(p.id)}" value="${e(p.key)}" placeholder="key, e.g. F6" title="F1–F12, optionally with Shift+ (F3, F4, F5 switch modes; F11 is full screen)">`).join('')}
+        <span class="fl">Bug out (all parts)</span><span></span><input class="in" data-outkey="1" value="${e(st.bug.outKey)}">
+        </div></div></section>
       <section class="panel" style="flex:none"><div class="ph">Automatic graphics</div><div class="pb pad"><div class="fgrid" style="grid-template-columns:150px minmax(0,1fr) 70px 20px">
         <span class="fl">New batter</span>${sel('batterTake', st.auto.batterTake)}<input class="in" type="number" min="0" max="120" data-auto="batterSecs" value="${e(st.auto.batterSecs)}"><span>s</span>
         <span class="fl">Pitch speed</span>${sel('pitchTake', st.auto.pitchTake)}<input class="in" type="number" min="0" max="120" data-auto="pitchSecs" value="${e(st.auto.pitchSecs)}"><span>s</span>
-      </div><p class="bb-note">New batter: taken each time a plate appearance ends and someone new comes up. Pitch speed: taken when you press SHOW. Seconds = how long it stays on (0 = until cleared).</p>
+        <span class="fl">Play popup</span>${sel('eventTake', st.auto.eventTake)}<input class="in" type="number" min="0" max="120" data-auto="eventSecs" value="${e(st.auto.eventSecs)}"><span>s</span>
+        <span class="fl">…for</span><span class="chkrow" style="grid-column:span 3">${[['k', 'K'], ['kl', 'ꓘ looking'], ['bb', 'Walk'], ['ibb', 'IBB'], ['hbp', 'HBP'], ['1b', '1B'], ['2b', '2B'], ['3b', '3B'], ['dp', 'DP'], ['e', 'Error']].map(([k, l]) => `<label><input type="checkbox" data-kind="${k}"${String(st.auto.eventKinds).split(/[\s,]+/).includes(k) ? ' checked' : ''}> ${l}</label>`).join('')}</span>
+        <span class="fl">Run scores</span>${sel('runTake', st.auto.runTake)}<input class="in" type="number" min="0" max="120" data-auto="runSecs" value="${e(st.auto.runSecs)}"><span>s</span>
+        <span class="fl">Home run</span>${sel('hrTake', st.auto.hrTake)}<span></span><span></span>
+        <span class="fl">Score hold</span><input class="in" type="number" min="0" max="10000" step="50" data-auto="holdMs" value="${e(st.auto.holdMs)}"><span>ms</span><span></span>
+        <span class="fl">Data delay</span><input class="in" type="number" min="0" max="60000" step="100" data-auto="delayMs" value="${e(st.auto.delayMs)}"><span>ms</span><span></span>
+      </div><p class="bb-note">New batter: taken each time someone new comes up. Pitch speed: taken when you press SHOW. Play popup: taken for the checked results. Run scores / Home run: a takeover that covers the bug; the bug's score waits "Score hold" ms so it changes underneath. Data delay: every graphic follows the game this much later, to match delayed video. Seconds = time on air (0 = until cleared).</p>
       <div class="bb-row"><button class="tbtn" data-bb="starter">Add starter baseball graphics</button>${ctx.starterScenes().map(s => `<button class="mini" data-edit="${e(s.id)}" title="Open in Layout mode">Edit ${e(s.name)}</button>`).join('')}</div></div></section>
       <section class="panel" style="flex:1"><div class="ph">Live fields<span class="sp"></span><span class="hint">Link any text, image or quad: Sequence › Template Data › DL › source "Baseball (live game)"</span></div>
         <div class="pb"><table class="grid bb-fields"><colgroup><col style="width:170px"><col style="width:40%"><col></colgroup><thead><tr><th>Field</th><th>Value now</th><th>About</th></tr></thead><tbody>
@@ -273,7 +330,7 @@
     const u = ctx.canUndo();
     mounted.querySelector('[data-bb="undo"]').disabled = !u.undo;
     mounted.querySelector('[data-bb="redo"]').disabled = !u.redo;
-    if (view === 'game') { renderScore(st); renderSitu(st); renderPeople(st); renderTakes(st); }
+    if (view === 'game') { renderScore(st); renderSitu(st); renderPeople(st); renderBug(st); renderNotes(st); renderTakes(st); }
     if (view === 'teams') renderTeams();
     if (view === 'setup') renderSetup();
   }
@@ -286,7 +343,7 @@
   };
   function key(ev) {
     if (view !== 'game' || ev.ctrlKey || ev.metaKey || ev.altKey) return false;
-    const a = KEYS[ev.key.toLowerCase()];
+    const a = ev.shiftKey && ev.key.toLowerCase() === 'k' ? { type: 'result', kind: 'kl' } : KEYS[ev.key.toLowerCase()];
     if (!a) return false;
     ev.preventDefault(); act(a); return true;
   }

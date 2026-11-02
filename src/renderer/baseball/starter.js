@@ -130,16 +130,83 @@
       scene('BB LINEUP', 'FS', 0, o, m);
     }
 
+    /* ---- at-bat box with top / bottom notes (bottom right) ---- */
+    {
+      const o = [], m = {};
+      o.push(R('PANEL', 1440, 868, 420, 96, PANEL, A('wipe', 0, 450), { radius: 4 }));
+      o.push(R('BAT CHIP', 1440, 868, 8, 48, '#0e3b6e', A('fade', 150, 300))); m['BAT CHIP'] = 'bat.color';
+      o.push(R('PIT CHIP', 1440, 916, 8, 48, '#b8461b', A('fade', 150, 300))); m['PIT CHIP'] = 'pit.color';
+      o.push(R('DIVIDER', 1448, 915, 412, 2, 'rgba(255,255,255,0.12)', A('fade', 150, 300)));
+      o.push(T('BATTER', 1464, 868, 280, 48, '2. BATTER', { size: 30 })); m.BATTER = 'bat.line';
+      o.push(T('BATTER TODAY', 1740, 868, 106, 48, '.000', { size: 28, align: 'right', color: ACC })); m['BATTER TODAY'] = 'bat.short';
+      o.push(T('PITCHER', 1464, 916, 280, 48, 'PITCHER', { size: 30 })); m.PITCHER = 'pit.line';
+      o.push(T('PITCH COUNT', 1740, 916, 106, 48, 'P: 0', { size: 28, align: 'right', color: DIM })); m['PITCH COUNT'] = 'pit.pc';
+      scene('BB AT BAT BOX', 'BUG', 32, o, m);
+    }
+    for (const [slot, y, color] of [['top', 822, STRIP], ['bottom', 966, STRIP]]) {
+      const o = [], m = {};
+      o.push(R('BAR', 1440, y, 420, 42, color, A('wipe', 0, 400), { radius: 4 }));
+      o.push(R('ACCENT', 1440, y, 6, 42, ACC, A('fade', 100, 300)));
+      o.push(T('NOTE', 1458, y, 392, 42, 'NOTE', { size: 24, weight: 700, upper: true }, A('fade', 200, 300))); m.NOTE = 'note.' + slot;
+      scene(`BB NOTE ${slot.toUpperCase()}`, 'BUG', slot === 'top' ? 33 : 34, o, m);
+    }
+    {
+      const o = [], m = {};
+      o.push(R('BAR', 460, 976, 1000, 50, PANEL, A('wipe', 0, 450), { radius: 4 }));
+      o.push(R('TAG', 460, 976, 170, 50, ACC, A('wipe', 60, 400), { radius: 4 }));
+      o.push(T('TAG TEXT', 460, 976, 170, 50, 'GAME FLOW', { size: 24, weight: 800, color: '#000000', align: 'center' }));
+      o.push(T('TEXT', 650, 976, 790, 50, 'Last play', { size: 26, upper: true }, A('fade', 250, 300))); m.TEXT = 'note.flow';
+      scene('BB GAME FLOW', 'L3', 21, o, m);
+    }
+
+    /* ---- play popup under the bug: K, ꓘ, BB, HBP… ---- */
+    {
+      const o = [], m = {};
+      o.push(R('TAG', 60, 144, 96, 64, '#0e3b6e', A('wipe', 0, 350), { radius: 4 })); m.TAG = 'event.color';
+      o.push(T('SHORT', 60, 144, 96, 64, 'K', { size: 46, weight: 800, align: 'center' }, A('scale', 150, 300))); m.SHORT = 'event.short';
+      o.push(R('PANEL', 156, 144, 400, 64, PANEL, A('wipe', 60, 400)));
+      o.push(T('LABEL', 174, 146, 370, 34, 'STRIKEOUT', { size: 28, weight: 800 }, A('fade', 200, 250))); m.LABEL = 'event.label';
+      o.push(T('TEXT', 174, 176, 370, 28, 'detail', { size: 20, weight: 600, color: DIM }, A('fade', 260, 250))); m.TEXT = 'event.text';
+      scene('BB PLAY POPUP', 'BUG', 35, o, m);
+    }
+
+    /* ---- RUN SCORES / HOME RUN takeover over the bug: a slanted wipe mask sweeps it on and off ---- */
+    {
+      const o = [], m = {}, NA = { published: true, anim: { in: 'none', delay: 0, dur: 0 } };
+      // slanted wipe, wide enough that its sloped edges sit outside the banner while it covers the bug
+      const wipe = O('rect', 'WIPE', -1700, 20, 1500, 150, { shape: 'parallelogram', fill: '#ffffff' }, { anim: { in: 'none' } });
+      wipe.visible = false;
+      wipe.keys = { x: [{ f: 0, v: -1700, e: 'out' }, { f: 12, v: -220, e: 'hold' }, { f: 15, v: -220, e: 'in' }, { f: 27, v: 1100, e: 'linear' }] };
+      o.push(wipe);
+      o.push(R('PANEL', 40, 30, 980, 128, '#0e3b6e', NA, { fill2: '#071a33', angle: 90 })); m.PANEL = 'score.color';
+      o.push(R('STRIPE', 40, 150, 980, 8, ACC, NA)); m.STRIPE = 'score.color2';
+      o.push(I('LOGO', 60, 38, 112, 112, '', NA)); m.LOGO = 'score.logo';
+      o.push(T('LABEL', 190, 30, 800, 92, 'RUN SCORES', { size: 84, weight: 800, italic: true, tracking: 2, upper: true, shadowOn: true, shadowOpacity: 50, shadowBlur: 10, shadowDist: 4 }, NA)); m.LABEL = 'score.label';
+      o.push(T('TEAM', 194, 112, 800, 36, 'TEAM NAME', { size: 24, weight: 600, tracking: 14, upper: true, color: '#e6ebf2' }, NA)); m.TEAM = 'score.full';
+      const shine = O('rect', 'SHINE', -300, 30, 120, 128, { fill: 'rgba(255,255,255,0.28)', skew: -24 }, NA);
+      shine.keys = { x: [{ f: 4, v: -300, e: 'linear' }, { f: 22, v: 1100, e: 'linear' }] };
+      o.push(shine);
+      for (const ob of o) if (ob !== wipe) { ob.mask = wipe.id; ob.maskMode = 'shape'; }
+      const sc = scene('BB RUN SCORES', 'BUG', 40, o, m);
+      sc.keyed = true; sc.tl = { fps: 30, pause: 15, end: 28 }; // hand-made keys: don't rebuild from presets
+    }
+
     /* Takes: [scene name, take name, link map, role] */
     const takes = [
-      ['BB SCOREBUG', 'Baseball: SCOREBUG', links['BB SCOREBUG']],
+      ['BB SCOREBUG', 'Baseball: SCOREBUG', links['BB SCOREBUG'], 'bug'],
       ['BB BATTER L3', 'Baseball: BATTER', links['BB BATTER L3'], 'batter'],
       ['BB PITCHER L3', 'Baseball: PITCHER', links['BB PITCHER L3']],
       ['BB DUE UP', 'Baseball: DUE UP', links['BB DUE UP']],
-      ['BB LINESCORE', 'Baseball: LINESCORE', links['BB LINESCORE']],
+      ['BB LINESCORE', 'Baseball: LINESCORE', links['BB LINESCORE'], 'scoreboard'],
       ['BB PITCH SPEED', 'Baseball: PITCH SPEED', links['BB PITCH SPEED'], 'pitch'],
       ['BB LINEUP', 'Baseball: AWAY LINEUP', links['BB LINEUP'].away],
-      ['BB LINEUP', 'Baseball: HOME LINEUP', links['BB LINEUP'].home]
+      ['BB LINEUP', 'Baseball: HOME LINEUP', links['BB LINEUP'].home],
+      ['BB AT BAT BOX', 'Baseball: AT-BAT BOX', links['BB AT BAT BOX'], 'box'],
+      ['BB NOTE TOP', 'Baseball: TOP NOTE', links['BB NOTE TOP'], 'top'],
+      ['BB NOTE BOTTOM', 'Baseball: BOTTOM NOTE', links['BB NOTE BOTTOM'], 'bottom'],
+      ['BB GAME FLOW', 'Baseball: GAME FLOW', links['BB GAME FLOW'], 'flow'],
+      ['BB PLAY POPUP', 'Baseball: PLAY POPUP', links['BB PLAY POPUP'], 'event'],
+      ['BB RUN SCORES', 'Baseball: RUN SCORES / HOME RUN', links['BB RUN SCORES'], 'run']
     ];
     return { scenes, takes };
   }

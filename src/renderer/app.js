@@ -252,7 +252,7 @@ async function fetchSource(s) {
     if (s.type === 'inline') res = { ok: true, text: s.text || '' };
     else if (s.type === 'baseball') {
       if (!P.baseball) throw new Error('Open Baseball mode (F5) to start a game');
-      const rows = BBFields.rows(P.baseball);
+      const rows = ui.bbRows || BBFields.rows(P.baseball); // the last published (possibly delayed / held) values
       res = { ok: true, rows, text: JSON.stringify(rows) };
     } else {
       const url = sourceUrl(s);
@@ -627,7 +627,14 @@ function renderInspector() {
     F('Name', mk(() => { sceneChanged(); $('#inspTitle').textContent = 'Object Inspector · ' + o.name; }).txt(o.name, v => { o.name = v; }));
     F('Flags', h('span', { class: 'chkrow' }, C.chk('Visible', o.visible, v => { o.visible = v; }), C.chk('Published', o.published, v => { o.published = v; })));
     const masks = sc.objects.filter(x => x !== o);
-    F('Mask', C.sel([['', 'None'], ...masks.map(x => [x.id, x.name + (x.visible ? '' : ' (hidden)')])], o.mask || '', v => { if (v) o.mask = v; else delete o.mask; }));
+    F('Mask', C.sel([['', 'None'], ...masks.map(x => [x.id, x.name + (x.visible ? '' : ' (hidden)')])], o.mask || '', v => { if (v) o.mask = v; else delete o.mask; setTimeout(renderInspector, 0); }));
+    if (o.mask) {
+      const mo = sc.objects.find(x => x.id === o.mask);
+      F('Mask uses', C.sel([['box', 'Its box (plain rectangle)'], ['shape', 'Its shape, rotation and scale'], ...(mo && mo.type === 'image' ? [['alpha', 'The image\'s transparency']] : [])], o.maskMode || 'box', v => { if (v === 'box') delete o.maskMode; else o.maskMode = v; }));
+      const fe = C.num(o.maskFeather || 0, v => { v = Math.max(0, Math.min(200, v)); if (v) o.maskFeather = v; else delete o.maskFeather; }, { min: 0, max: 200, step: 1 });
+      fe.style.width = '60px';
+      F('Mask edge', h('span', { class: 'krow' }, C.chk('Invert', !!o.maskInvert, v => { if (v) o.maskInvert = true; else delete o.maskInvert; }), h('span', { class: 'tl' }, 'Feather'), fe, h('span', { class: 'tl' }, 'px')));
+    }
     g.append(h('div', { class: 'sect' }, `At frame ${Math.round(ui.frame)}` + (ui.autoKey ? ' · auto-key on' : '')));
     const lim = { alpha: [0, 100], scale: [1, 1000], clipL: [0, 100], clipR: [0, 100] };
     for (const pr of KL.PROPS) {
@@ -635,7 +642,7 @@ function renderInspector() {
       const e = C.num(v, nv => { const L = lim[pr]; if (L) nv = Math.min(L[1], Math.max(L[0], nv)); if ((pr === 'w' || pr === 'h') && nv < 1) nv = 1; setProp(o, pr, nv); }, { step: /rot/.test(pr) ? 0.5 : 1 });
       F(KL.PROP_LABEL[pr], h('span', { class: 'krow' }, e, keyToggle(o, pr)));
     }
-    g.append(h('p', { class: 'note' }, 'Mask: this object only shows inside the chosen object\'s box. Animate the mask object for reveals; it can be hidden.'));
+    g.append(h('p', { class: 'note' }, 'Mask: this object only shows inside the chosen object (its box, or its real shape: chevron, ellipse, rotated or scaled quad, or an image\'s transparency). Invert shows it everywhere except there; Feather softens the edge. Animate the mask object for wipes and reveals; it can be hidden.'));
     g.append(h('div', { class: 'btnrow' },
       h('button', { class: 'tbtn', onclick: () => { snapshot(); setProp(o, 'x', Math.round((W - KL.valueAt(o, 'w', ui.frame)) / 2)); sceneChanged(); renderInspector(); } }, 'Center H'),
       h('button', { class: 'tbtn', onclick: () => { snapshot(); setProp(o, 'y', Math.round((H - KL.valueAt(o, 'h', ui.frame)) / 2)); sceneChanged(); renderInspector(); } }, 'Center V'),
@@ -1151,13 +1158,22 @@ function bbControl(arg) {
   const a = { type };
   for (const pair of kv) { const i = pair.indexOf('='); if (i > 0) { const v = pair.slice(i + 1); a[pair.slice(0, i)] = /^-?\d+$/.test(v) ? +v : v === 'true' ? true : v === 'false' ? false : v; } }
   if (type.toLowerCase() === 'undo') { bbUndoAct(); return { ok: true }; }
+  if (type.toLowerCase() === 'bugout') return bbBugOut();
+  if (type.toLowerCase() === 'part') return bbTogglePart(String(a.id), a.on === undefined ? undefined : !!a.on);
   if (type.toLowerCase() === 'redo') { bbRedoAct(); return { ok: true }; }
   return bbDispatch(a);
 }
 function bbFieldsJson() { ensureBaseball(); return { ok: true, fields: Object.fromEntries(BBFields.build(P.baseball).map(([f, v]) => [f, v])) }; }
 function handleControl(cmd) {
   if (cmd && typeof cmd === 'object') {
-    if (cmd.cmd === 'BASEBALL') { logControl(`HTTP baseball ${JSON.stringify(cmd.action)}`); return cmd.action.type === 'undo' ? (bbUndoAct(), { ok: true }) : cmd.action.type === 'redo' ? (bbRedoAct(), { ok: true }) : bbDispatch(cmd.action); }
+    if (cmd.cmd === 'BASEBALL') {
+      const a = cmd.action; logControl(`HTTP baseball ${JSON.stringify(a)}`);
+      if (a.type === 'undo') { bbUndoAct(); return { ok: true }; }
+      if (a.type === 'redo') { bbRedoAct(); return { ok: true }; }
+      if (a.type === 'bugout') return bbBugOut();
+      if (a.type === 'part') return bbTogglePart(String(a.id), a.on === undefined ? undefined : !!a.on);
+      return bbDispatch(a);
+    }
     if (cmd.cmd === 'BASEBALLSTATE') return bbFieldsJson();
   }
   if (cmd && typeof cmd === 'object') { if (cmd.cmd === 'SETDATA') { logControl(`HTTP set ${cmd.take} ${JSON.stringify(cmd.fields)}`); return setData(cmd.take, cmd.fields); } return { ok: false, error: 'Unknown command' }; }
@@ -1292,7 +1308,7 @@ async function saveProject(saveAs) {
   return true;
 }
 function loadProject(p, path) {
-  bbUndo = []; bbRedo = [];
+  bbUndo = []; bbRedo = []; ui.bbRows = null;
   clearAllNow();
   P = migrate(p); ui.filePath = path || null; lsSet(KEY + '-path', path || '');
   undoStack = []; redoStack = [];
@@ -1469,16 +1485,53 @@ function ensureBaseball() {
   if (!bbSource()) { P.dataSources.push({ id: BBFields.SOURCE_ID, name: 'Baseball (live game)', type: 'baseball', header: true, interval: 0, enabled: true }); changed = true; }
   if (changed) { save(); bbPublish(); }
 }
-function bbPublish() { const s = bbSource(); if (s && P.baseball) fetchSource(s); }
+/* Score hold: while a RUN SCORES takeover covers the bug, the score fields keep their old values
+   for holdMs, so the number changes underneath the takeover instead of before it. */
+let bbHoldUntil = 0, bbHeldRows = null;
+const HELD = /^(away|home)\.(runs|inn\d+)$/;
+function bbRowsNow() {
+  const rows = BBFields.rows(P.baseball);
+  if (bbHeldRows && performance.now() < bbHoldUntil) {
+    const prev = new Map(bbHeldRows.map(r => [r[0], r[1]]));
+    for (const r of rows) if (HELD.test(r[0]) && prev.has(r[0])) r[1] = prev.get(r[0]);
+  }
+  return rows;
+}
+/* Data delay: graphics follow the game delayMs later, to stay in sync with delayed video. */
+const bbDelay = fn => { const d = P.baseball ? +P.baseball.auto.delayMs || 0 : 0; if (d) setTimeout(fn, d); else fn(); };
+function bbPublish() {
+  const s = bbSource(); if (!s || !P.baseball) return;
+  const rows = bbRowsNow();
+  bbDelay(() => { ui.bbRows = rows; fetchSource(s); });
+}
 function bbDispatch(a) {
   ensureBaseball();
-  const before = JSON.stringify(P.baseball), work = JSON.parse(before), pa = P.baseball.game.pa;
+  const before = JSON.stringify(P.baseball), work = JSON.parse(before), prev = P.baseball.game;
   let isGame;
   try { isGame = BBEngine.apply(work, a); } catch (err) { toast(err.message); return { ok: false, error: err.message }; }
   if (isGame) { bbUndo.push(before); if (bbUndo.length > 200) bbUndo.shift(); bbRedo = []; }
-  P.baseball = work; save(); bbPublish();
+  const prevRows = BBFields.rows(P.baseball);
+  P.baseball = work;
+  const g = work.game, au = work.auto;
+  // a team scored: RUN SCORES / HOME RUN takeover, with the bug's score held until it's covered
+  const scored = g.score && (!prev.score || prev.score.n !== g.score.n);
+  const takeover = scored && (P.takes.find(t => t.id === (g.score.hr && au.hrTake ? au.hrTake : au.runTake)));
+  if (takeover && +au.holdMs > 0) {
+    if (performance.now() >= bbHoldUntil) bbHeldRows = prevRows;
+    bbHoldUntil = performance.now() + +au.holdMs;
+    setTimeout(bbPublish, +au.holdMs + 10);
+  }
+  save(); bbPublish();
+  if (takeover) bbDelay(() => {
+    const pop = au.eventTake && P.takes.find(t => t.id === au.eventTake), pa = pop && airOf(pop);
+    if (pa) outLayer(pa.L, pa.ch); // the takeover replaces any play popup still up
+    bbTakeFor(takeover, au.runSecs);
+  });
+  // strikeout / walk / HBP… popup
+  const evNew = g.event && (!prev.event || prev.event.n !== g.event.n);
+  if (evNew && !takeover && au.eventTake && String(au.eventKinds).split(/[\s,]+/).includes(g.event.kind)) bbDelay(() => bbAutoTake(au.eventTake, au.eventSecs));
   // a new batter came up: fire the automatic batter graphic
-  if (work.game.pa !== pa && !work.game.transition && !work.game.final) bbAutoTake(work.auto.batterTake, work.auto.batterSecs);
+  if (g.pa !== prev.pa && !g.transition && !g.final) bbDelay(() => bbAutoTake(au.batterTake, au.batterSecs));
   BBConsole.render();
   if (ui.mode === 'seq') refreshDlValues();
   return { ok: true };
@@ -1497,10 +1550,43 @@ function bbTakeFor(t, secs) {
   BBConsole.render();
 }
 function bbAutoTake(id, secs) { const t = id && P.takes.find(x => x.id === id); if (t) bbTakeFor(t, secs); }
+/* Bug Control: each bug part is a take on its own layer, switched on and off by a key */
+const bbPartTake = part => part && part.take && P.takes.find(t => t.id === part.take);
+function bbTogglePart(id, want) {
+  ensureBaseball();
+  const part = P.baseball.bug.parts.find(x => x.id === id), t = bbPartTake(part);
+  if (!t) { toast(`Choose a take for "${part ? part.label : id}" in Baseball › Graphics setup`); return { ok: false, error: 'No take for ' + id }; }
+  const a = airOf(t), on = !!a;
+  if (want === undefined) want = !on;
+  if (want && !on) doTake(t, { advance: false, follow: false });
+  else if (!want && on) outLayer(a.L, a.ch);
+  BBConsole.render();
+  return { ok: true, part: id, onAir: want };
+}
+function bbBugOut() {
+  ensureBaseball();
+  for (const part of P.baseball.bug.parts) { const t = bbPartTake(part), a = t && airOf(t); if (a) outLayer(a.L, a.ch); }
+  BBConsole.render();
+  return { ok: true };
+}
+const keyName = e => (e.shiftKey ? 'Shift+' : '') + (e.ctrlKey || e.metaKey ? 'Ctrl+' : '') + e.key;
+function bbKey(e) {
+  if (!P.baseball || !/^F\d+$/.test(e.key)) return false;
+  const k = keyName(e).toLowerCase();
+  if (String(P.baseball.bug.outKey).toLowerCase() === k) { e.preventDefault(); bbBugOut(); return true; }
+  const part = P.baseball.bug.parts.find(x => String(x.key).toLowerCase() === k);
+  if (part) { e.preventDefault(); bbTogglePart(part.id); return true; }
+  return false;
+}
 function bbAddStarter() {
   ensureBaseball(); snapshot();
   const { scenes, takes } = BBStarter.build(O);
-  for (const sc of scenes) { sc.id = uid(); sc.tl = { fps: 30, pause: 30, end: 45 }; KL.presetTimeline(sc); P.scenes.push(sc); }
+  for (const sc of scenes) {
+    sc.id = uid();
+    if (sc.keyed) delete sc.keyed; // hand-made keyframes (the takeover's wipe): keep them
+    else { sc.tl = { fps: 30, pause: 30, end: 45 }; KL.presetTimeline(sc); }
+    P.scenes.push(sc);
+  }
   let num = Math.max(1000, ...P.takes.map(t => t.num)) + 1;
   const made = {};
   for (const [scName, name, map, role] of takes) {
@@ -1510,8 +1596,9 @@ function bbAddStarter() {
     P.takes.push(t);
     if (role) made[role] = t.id;
   }
-  if (made.batter && !P.baseball.auto.batterTake) P.baseball.auto.batterTake = made.batter;
-  if (made.pitch && !P.baseball.auto.pitchTake) P.baseball.auto.pitchTake = made.pitch;
+  const au = P.baseball.auto, setIf = (k, v) => { if (v && !au[k]) au[k] = v; };
+  setIf('batterTake', made.batter); setIf('pitchTake', made.pitch); setIf('eventTake', made.event); setIf('runTake', made.run); setIf('hrTake', made.run);
+  for (const part of P.baseball.bug.parts) if (made[part.id] && !bbPartTake(part)) part.take = made[part.id];
   save(); renderCats(); renderSceneLists(); BBConsole.render();
   toast(`Added ${scenes.length} baseball scenes and ${takes.length} takes. Redesign them in Layout mode.`);
 }
@@ -1535,7 +1622,10 @@ BBConsole.mount($('#bbMode'), {
   openLayout: id => { const sc = sceneById(id); if (!sc) return; ui.sceneId = id; ui.selObj = null; ui.selKeys = []; ui.frame = KL.tlOf(sc).pause; setMode('layout'); },
   fields: () => BBFields.build(P.baseball),
   starterScenes: () => P.scenes.filter(x => /^BB /.test(x.name)),
-  undo: bbUndoAct, redo: bbRedoAct, canUndo: () => ({ undo: bbUndo.length > 0, redo: bbRedo.length > 0 })
+  undo: bbUndoAct, redo: bbRedoAct, canUndo: () => ({ undo: bbUndo.length > 0, redo: bbRedo.length > 0 }),
+  partState: part => { const t = bbPartTake(part); return { take: t, onAir: !!(t && airOf(t)) }; },
+  togglePart: id => bbTogglePart(id), bugOut: bbBugOut,
+  noteText: slot => BBFields.noteText(P.baseball, slot), noteTypes: BBFields.NOTE_TYPES
 });
 
 /* ======================= Clocks & timers panel ======================= */
@@ -1710,6 +1800,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'F3') { e.preventDefault(); setMode('layout'); return; }
   if (e.key === 'F4') { e.preventDefault(); setMode('seq'); return; }
   if (e.key === 'F5') { e.preventDefault(); setMode('bb'); return; }
+  if (ui.mode === 'bb' && $('#modal').hidden && bbKey(e)) return; // bug part keys work even while typing
   if (!$('#modal').hidden) { if (e.key === 'Escape') closeModal(); return; }
   if (openMenu && e.key === 'Escape') { closeMenu(); return; }
   const k = e.key.toLowerCase();
@@ -1811,5 +1902,5 @@ if (api) {
   // localStorage can be cleared or full; the file autosave is the crash-recovery copy
   if (!lsGet(KEY)) api.loadAutosave().then(t => { try { const p = t && JSON.parse(t); if (p && p.scenes && p.takes) { loadProject(p, null); ui.dirty = true; updateTitle(); toast('Recovered your last autosaved project'); } } catch (e) { /* no autosave */ } });
 }
-window.__kl = { get P() { return P; }, ui, bbDispatch, bbAddStarter, program, programs, timerCmd, handleControl, act, setFrame, DL, fetchSource, dashboardXML, setProp, sceneChanged, contentOf, loadProject };
+window.__kl = { get P() { return P; }, ui, bbDispatch, bbAddStarter, bbTogglePart, bbBugOut, program, programs, timerCmd, handleControl, act, setFrame, DL, fetchSource, dashboardXML, setProp, sceneChanged, contentOf, loadProject };
 })();

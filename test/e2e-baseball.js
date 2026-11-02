@@ -51,7 +51,7 @@ const osKey = (app, keyCode, modifiers) => app.evaluate(({ BrowserWindow }, a) =
   await test('starter graphics: editable scenes and linked takes, auto batter take set', async () => {
     await win.click('[data-bb="starter"]');
     const r = await win.evaluate(() => ({ scenes: __kl.P.scenes.filter(s => /^BB /.test(s.name)).length, takes: __kl.P.takes.filter(t => /^Baseball:/.test(t.name)).length, auto: !!__kl.P.baseball.auto.batterTake }));
-    assert.deepStrictEqual(r, { scenes: 7, takes: 8, auto: true });
+    assert.deepStrictEqual(r, { scenes: 13, takes: 14, auto: true });
   });
   await test('take the scorebug: team abbreviations, team color and score on air', async () => {
     await takeRow('SCOREBUG').click();
@@ -92,7 +92,7 @@ const osKey = (app, keyCode, modifiers) => app.evaluate(({ BrowserWindow }, a) =
     await osKey(app, 'Z', ['control']); await sleep(250);
     assert.strictEqual(await runs('away'), 0);
     assert.strictEqual((await onAir('BB SCOREBUG', 'AWAY SCORE')).text, '0');
-    assert.strictEqual(await win.evaluate(() => __kl.P.scenes.filter(s => /^BB /.test(s.name)).length), 7);
+    assert.strictEqual(await win.evaluate(() => __kl.P.scenes.filter(s => /^BB /.test(s.name)).length), 13);
     await osKey(app, 'Y', ['control']); await sleep(250);
     assert.strictEqual(await runs('away'), 2);
   });
@@ -142,6 +142,99 @@ const osKey = (app, keyCode, modifiers) => app.evaluate(({ BrowserWindow }, a) =
     await win.click('.bb-tabs [data-view="game"]');
   });
 
+  console.log('Bug control');
+  const takeOn = name => win.evaluate(n => { const t = __kl.P.takes.find(x => x.name === n); return !!Object.values(__kl.programs).some(p => Object.values(p.layers).some(l => l.msg.takeId === t.id)); }, name);
+  await test('starter graphics fill in the bug parts and automatic takes', async () => {
+    const r = await win.evaluate(() => { const b = __kl.P.baseball; const nm = id => (__kl.P.takes.find(t => t.id === id) || {}).name; return { parts: b.bug.parts.map(p => p.id + ':' + nm(p.take)), run: nm(b.auto.runTake), ev: nm(b.auto.eventTake) }; });
+    assert.ok(r.parts.includes('box:Baseball: AT-BAT BOX'), r.parts.join());
+    assert.ok(r.parts.includes('scoreboard:Baseball: LINESCORE'));
+    assert.strictEqual(r.run, 'Baseball: RUN SCORES / HOME RUN'); assert.strictEqual(r.ev, 'Baseball: PLAY POPUP');
+  });
+  await test('F7 toggles the at-bat box on and off; BUG OUT clears every part', async () => {
+    await win.evaluate(() => __kl.act.clearAll && document.activeElement && document.activeElement.blur());
+    await win.keyboard.press('F7'); await sleep(700);
+    assert.strictEqual(await takeOn('Baseball: AT-BAT BOX'), true);
+    assert.strictEqual((await onAir('BB AT BAT BOX', 'PITCHER')).text, 'CORRIGAN', 'home team at bat, away pitching');
+    await win.keyboard.press('F7'); await sleep(700);
+    assert.strictEqual(await takeOn('Baseball: AT-BAT BOX'), false);
+    await win.keyboard.press('F1'); await win.keyboard.press('F8'); await sleep(600);
+    assert.strictEqual(await takeOn('Baseball: TOP NOTE'), true);
+    await win.click('[data-bugout]'); await sleep(700);
+    for (const n of ['Baseball: SCOREBUG', 'Baseball: TOP NOTE']) assert.strictEqual(await takeOn(n), false, n);
+    await win.keyboard.press('F1'); await sleep(600);
+    assert.strictEqual(await takeOn('Baseball: SCOREBUG'), true);
+  });
+  await test('notes fill themselves by type; custom text works', async () => {
+    await win.fill('#bbEv', '104'); await win.fill('#bbLa', '28'); await win.fill('#bbDist', '412'); await win.click('#bbHitGo');
+    assert.match(await win.textContent('#bbNotes'), /EXIT VELO 104 MPH · 28° · 412 FT/);
+    await win.selectOption('[data-note-type="bottom"]', 'custom');
+    await win.fill('[data-note-text="bottom"]', 'Career high 3 hits'); await win.press('[data-note-text="bottom"]', 'Tab');
+    await win.keyboard.press('F9'); await sleep(700);
+    assert.strictEqual((await onAir('BB NOTE BOTTOM', 'NOTE')).text, 'Career high 3 hits');
+    await win.keyboard.press('F9'); await sleep(500);
+  });
+  await test('strikeout looking (Shift+K) fires the play popup with ꓘ', async () => {
+    await win.click('#bbLast');
+    await win.keyboard.press('Shift+K'); await sleep(800);
+    assert.strictEqual((await game()).event.kind, 'kl');
+    assert.strictEqual((await onAir('BB PLAY POPUP', 'SHORT')).text, 'ꓘ');
+    assert.strictEqual((await onAir('BB PLAY POPUP', 'LABEL')).text, 'STRIKEOUT LOOKING');
+    assert.match((await onAir('BB PLAY POPUP', 'TEXT')).text, /K FOR CORRIGAN/);
+  });
+  await test('a run takes the RUN SCORES takeover and holds the bug score until it covers', async () => {
+    const before = await runs('home');
+    await win.evaluate(() => __kl.bbDispatch({ type: 'result', kind: 'hr' }));
+    await sleep(120);
+    assert.strictEqual(await takeOn('Baseball: RUN SCORES / HOME RUN'), true);
+    assert.strictEqual((await onAir('BB SCOREBUG', 'HOME SCORE')).text, String(before), 'score still held');
+    assert.strictEqual((await onAir('BB RUN SCORES', 'LABEL')).text, 'HOME RUN');
+    await sleep(600);
+    assert.strictEqual((await onAir('BB SCOREBUG', 'HOME SCORE')).text, String(before + 1), 'score revealed');
+    const masked = await win.evaluate(() => { const sc = __kl.P.scenes.find(s => s.name === 'BB RUN SCORES'); const o = sc.objects.find(x => x.name === 'LABEL'); return document.querySelector(`#pgmLayers1 .go[data-id="${o.id}"]`).style.maskImage; });
+    assert.match(masked, /^url\("data:image\/svg/, 'takeover is revealed through a shape mask');
+    await win.screenshot({ path: path.join(SHOTS, 'bb-6-takeover.png') });
+  });
+  await test('LOB counts runners stranded at the end of a half', async () => {
+    const lob = (await game()).lob.home;
+    await win.evaluate(() => { __kl.bbDispatch({ type: 'result', kind: 'bb' }); });
+    const outs = 3 - (await game()).outs;
+    for (let i = 0; i < outs; i++) await win.evaluate(() => __kl.bbDispatch({ type: 'result', kind: 'out' }));
+    assert.strictEqual((await game()).lob.home, lob + 1);
+  });
+  await test('data delay: graphics follow the game later', async () => {
+    await win.evaluate(() => __kl.bbDispatch({ type: 'auto', delayMs: 800 }));
+    const ct = (await onAir('BB SCOREBUG', 'COUNT')).text;
+    await win.evaluate(() => __kl.bbDispatch({ type: 'pitch', kind: 'ball' }));
+    await sleep(300);
+    assert.strictEqual((await onAir('BB SCOREBUG', 'COUNT')).text, ct, 'not yet');
+    await sleep(800);
+    assert.notStrictEqual((await onAir('BB SCOREBUG', 'COUNT')).text, ct, 'arrived');
+    await win.evaluate(() => __kl.bbDispatch({ type: 'auto', delayMs: 0 }));
+  });
+  await test('Bug Control screenshot', async () => { await win.screenshot({ path: path.join(SHOTS, 'bb-7-bugcontrol.png') }); });
+
+  console.log('Masks');
+  await test('shape, inverted, feathered and image masks render as CSS masks', async () => {
+    const r = await win.evaluate(() => {
+      const mkO = (type, name, x, y, w, h, p) => ({ id: name, name, type, x, y, w, h, alpha: 100, visible: true, anim: { in: 'none' }, p: Object.assign({}, KL.DEF[type], p) });
+      const objs = [mkO('rect', 'A', 0, 0, 400, 200, { fill: '#f00' }), mkO('rect', 'MA', 50, 0, 300, 200, { shape: 'chevron' }), mkO('image', 'MI', 0, 0, 200, 200, { src: KL.LOGO })];
+      objs[0].mask = 'MA'; objs[0].maskMode = 'shape'; objs[1].rotation = 15;
+      const host = document.createElement('div'); document.body.append(host);
+      const sc = { objects: objs, tl: { fps: 30, pause: 30, end: 45 } };
+      const pl = new KL.Player(host, sc, {}); const el = host.querySelector('[data-id="A"]');
+      const shape = decodeURIComponent(el.style.maskImage);
+      objs[0].maskInvert = true; objs[0].maskFeather = 20; pl.seek(30); const inv = decodeURIComponent(el.style.maskImage);
+      objs[0].mask = 'MI'; objs[0].maskMode = 'alpha'; objs[0].maskInvert = false; objs[0].maskFeather = 0; pl.seek(30); const img = el.style.maskImage;
+      objs[0].maskMode = 'box'; pl.seek(30); const box = [el.style.maskImage, el.style.clipPath];
+      host.remove();
+      return { shape, inv, img, box };
+    });
+    assert.match(r.shape, /<polygon points=/); assert.match(r.shape, /rotate\(15\)/);
+    assert.match(r.inv, /<mask id='m'/); assert.match(r.inv, /feGaussianBlur stdDeviation='10'/);
+    assert.match(r.img, /^url\("data:image\/svg\+xml/); // the logo itself is an SVG data URI
+    assert.strictEqual(r.box[0], ''); assert.match(r.box[1], /^inset\(/);
+  });
+
   console.log('Design integration');
   await test('Edit opens a baseball scene in Layout mode; a design change shows on air', async () => {
     await win.click('.bb-tabs [data-view="setup"]');
@@ -155,14 +248,14 @@ const osKey = (app, keyCode, modifiers) => app.evaluate(({ BrowserWindow }, a) =
     await win.screenshot({ path: path.join(SHOTS, 'bb-5-layout.png') });
   });
   await test('design undo in Layout mode does not rewind the score', async () => {
-    const before = await runs('away'), scenes = await win.evaluate(() => __kl.P.scenes.length);
+    const before = await runs('away'), home = await runs('home'), scenes = await win.evaluate(() => __kl.P.scenes.length);
     await win.evaluate(() => __kl.act.dupScene());
     assert.strictEqual(await win.evaluate(() => __kl.P.scenes.length), scenes + 1);
     await win.evaluate(() => __kl.bbDispatch({ type: 'runs', team: 'home', delta: 1 }));
     await win.evaluate(() => document.activeElement && document.activeElement.blur());
     await osKey(app, 'Z', ['control']); await sleep(250);
     assert.strictEqual(await win.evaluate(() => __kl.P.scenes.length), scenes, 'duplicate scene undone');
-    assert.strictEqual(await runs('home'), 1, 'the run scored after it is kept');
+    assert.strictEqual(await runs('home'), home + 1, 'the run scored after it is kept');
     assert.strictEqual(await runs('away'), before);
   });
   await test('Sequence mode: the DL editor picks baseball fields by name', async () => {
@@ -173,7 +266,8 @@ const osKey = (app, keyCode, modifiers) => app.evaluate(({ BrowserWindow }, a) =
     const vals = await win.evaluate(() => [...document.querySelectorAll('#tiBody input.bbfield')].map(i => i.value));
     assert.ok(vals.includes('bat.name'), vals.join());
     const shown = await win.evaluate(() => [...document.querySelectorAll('#tiBody .dlval')].map(e => e.textContent).join('|'));
-    assert.match(shown, /= Test Player1/); // home is batting, with the roster imported above
+    const now = await win.evaluate(() => new Map(__kl.ui.bbRows.map(r => [r[0], r[1]])).get('bat.name'));
+    assert.ok(shown.includes('= ' + now), `${shown} should show the batter now up, ${now}`);
   });
 
   console.log('Control');
@@ -192,11 +286,12 @@ const osKey = (app, keyCode, modifiers) => app.evaluate(({ BrowserWindow }, a) =
     assert.strictEqual(bad.ok, false);
   });
   await test('the game saves inside the project file', async () => {
+    const home = await runs('home');
     const txt = await win.evaluate(() => JSON.stringify(__kl.P));
     const p = JSON.parse(txt);
     assert.ok(p.baseball && p.baseball.teams.home.roster.length === 10);
     await win.evaluate(t => __kl.loadProject(JSON.parse(t), null), txt);
-    assert.strictEqual(await runs('home'), 1);
+    assert.strictEqual(await runs('home'), home);
   });
   await test('no renderer errors', () => assert.deepStrictEqual(errors.filter(e => !/Autofill/.test(e)), []));
   await app.evaluate(({ app }) => app.exit(0)).catch(() => {});

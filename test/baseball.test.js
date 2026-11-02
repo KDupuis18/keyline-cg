@@ -241,7 +241,7 @@ test('every starter link points at a real field and a real object', () => {
   const O = (type, name, x, y, w, h, p, extra) => ({ id: 'o' + (n++), type, name, x, y, w, h, p, anim: extra.anim });
   const { scenes, takes } = ST.build(O);
   const names = new Set(F.build(fresh()).map(r => r[0]));
-  assert.strictEqual(scenes.length, 7); assert.strictEqual(takes.length, 8);
+  assert.strictEqual(scenes.length, 13); assert.strictEqual(takes.length, 14);
   for (const [scName, , map] of takes) {
     const sc = scenes.find(s => s.name === scName);
     for (const [obj, spec] of Object.entries(map)) {

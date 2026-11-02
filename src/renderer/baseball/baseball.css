@@ -61,7 +61,7 @@
 .bb-b.hr { background: linear-gradient(#ef4a50, #b8191f); border-color: #7d0d11; }
 .bb-b.out { background: linear-gradient(#5a3f47, #3d2a30); border-color: #2a1a1f; }
 .bb-b.on { background: linear-gradient(#1d8a8f, #0e6166); border-color: #094347; }
-.bb-b.wide { grid-column: span 3; font-size: 14px; }
+.bb-b.wide { grid-column: span 2; font-size: 14px; }
 .bb-b:hover { filter: brightness(1.1); }
 .bb-last { margin-top: 8px; padding: 6px 8px; background: #fff; border: 1px solid var(--line2); min-height: 28px; }
 
@@ -104,3 +104,22 @@
 
 /* DataLinq editor: baseball field picker */
 .dlbox .bbfield { font-family: var(--mono); }
+
+/* bug control */
+.bb-bugrow { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.bb-bugin { height: 40px; justify-content: center; font-weight: 700; background: linear-gradient(#3bc56a, #1b8a42) !important; color: #fff; border-color: #0f5a2a !important; }
+.bb-bugin.air { background: linear-gradient(#ef4a50, #b8191f) !important; border-color: #7d0d11 !important; }
+.bb-bugin kbd, .bb-bugin.air kbd { color: #e6ffe9; }
+.bb-bugin.air kbd { color: #ffd9da; }
+.bb-bugout { height: 40px; justify-content: center; font-weight: 700; }
+.bb-parts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
+.bb-part { height: 26px; text-align: left; display: flex; align-items: center; gap: 4px; }
+.bb-part kbd { margin-left: auto; font: 9px var(--mono); color: var(--muted); }
+.bb-part.air { background: linear-gradient(#ef4a50, #b8191f) !important; color: #fff; border-color: #7d0d11 !important; }
+.bb-part.air kbd { color: #ffd9da; }
+.bb-part.unset { opacity: .55; }
+.bb-note-row { display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; gap: 4px; align-items: center; margin-top: 6px; }
+.bb-note-row:first-child { margin-top: 0; }
+.bb-note-row .bb-part { height: 22px; }
+.bb-note-now, .bb-note-text { margin: 2px 0 0 54px; font: 600 11px var(--mono); color: #1d2330; background: #fff; border: 1px solid var(--line2); padding: 2px 5px; min-height: 20px; width: calc(100% - 54px); }
+.bb-note-now i { color: var(--muted); font-weight: 400; }
