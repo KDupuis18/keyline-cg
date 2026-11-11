@@ -1,73 +1,87 @@
-# Liftwise: AI workout planner for iPhone
+# Liftwise: AI workout planner & training log for iPhone
 
-Liftwise is a SwiftUI iPhone app. You tell its AI coach what you want to work on, and it builds a periodized, multi-week training program. You then follow the program one workout at a time and log every set.
+Liftwise is a full training app built in SwiftUI. You pick a ready-made program or have the AI coach design one for your goal. Liftwise then runs it for you: it schedules each session, suggests what weight to lift, detects personal records, reminds you to train and builds your next block when you finish.
 
 ## Features
 
-- **AI plan builder.** Pick a goal (build muscle, get stronger, lose fat, jump higher, run faster, athletic performance or general fitness) or describe your own. Then set:
-  - areas to emphasize
-  - program length (2 to 16 weeks) and days per week (2 to 6)
-  - session length
-  - experience level and available equipment
+### Programs
+- **AI program builder.** Pick any goal, then set:
+  - focus areas
+  - program length (2–16 weeks) and days per week
+  - session length, experience level and equipment
   - injuries and other notes
 
-  Claude returns a full program. It includes week-to-week progression, deload weeks and exercises that match your equipment.
-- **Live progress while it builds.** The response streams in, so you see "Writing week 3 of 8…" instead of a frozen spinner.
-- **Offline template builder.** With no API key, a rule-based builder makes a solid program from the same inputs. It uses the right split for your days per week, an exercise library filtered by equipment, 3-week loading waves and deloads.
-- **Today tab.** Shows your program progress ring, the next workout card and this week's schedule.
-- **Workout logging.** Log weight and reps for each set, with a check-off button per set. A rest timer starts when you check off a set, and you can add 15 seconds or skip it. You can also add or remove sets. Weights are prefilled from the last time you did the same exercise, which makes progressive overload easy.
-- **Programs tab.** Lists every program you've built. You can switch the active program or swipe to delete one.
-- **Settings.** Choose lb or kg and pick the Claude model (Opus 5.5 by default, or Sonnet or Haiku for faster, cheaper plans). Your API key is stored in the iOS Keychain.
+  Claude designs a periodized plan with progressive overload and deload weeks.
+- **Program library.** 11 ready-made plans:
+  - strength: Starter Strength 3x, Power & Size 5x
+  - muscle: Upper/Lower Builder, Push Pull Legs 6x
+  - home: Dumbbell Home Builder, Bodyweight Anywhere
+  - fat loss: Lean & Conditioned, Kettlebell Shred
+  - athletic: Vertical Jump Accelerator, Off-Season Athlete
+  - running: 5K Speed Builder
 
-## Requirements
+  You can preview each one, change its length, start it in one tap, or have the AI personalize it.
+- **Custom programs.** Pick your training days, then fill in the workouts.
+- **Workout editor.** Rename a workout, change its day and time, or add, swap, reorder and delete exercises. You can edit sets, reps, intensity, rest and cues. When you swap an exercise, the swap also applies to later weeks. "Copy to all later weeks" repeats a workout through the rest of the program.
+- **Adjust with AI.** Describe a change in plain English, such as "I only have dumbbells for 3 weeks" or "my back is sore". Claude rewrites the weeks you haven't started and leaves the ones you have alone.
+- **Auto next block.** When a program ends, one tap builds the next block from your new estimated maxes.
 
-- macOS with **Xcode 16 or later**
-- iOS **17.0 or later**, on a device or the simulator
+### Training
+- **Auto-progression.** Liftwise suggests each set's weight from:
+  - **Last performance:** if you hit all your reps, it adds weight. If you miss, you repeat the weight. If you miss two sessions in a row, it resets the weight down 10%.
+  - **Logged RPE:** if the last session felt easy, the weight goes up; if it felt too hard, the weight comes down.
+  - **% of 1RM** prescriptions, using your estimated max.
+  - **Deload weeks,** which drop the weight to about 85%.
+- **Workout logger.**
+  - Weight and reps are prefilled. Each exercise shows what you did last time, and you can add an optional RPE to any set.
+  - You can add or remove sets.
+  - A session timer runs while you train.
+  - The workout notes from your plan are shown, and you can add your own session notes.
+- **PR detection.** A banner and haptic tap appear when you beat your best estimated 1RM on a lift.
+- **Rest timer.** It starts when you check off a set, and you can add 15 seconds or skip it. It also sends a notification when rest is over, even if the app is in the background.
+- **Warm-up ramps and plate math.** Liftwise works out warm-up sets for any working weight and shows the plates to load on each side.
+- **Workout summary.** Shows duration, volume, sets, PRs and notes. You can skip a workout or reset it.
+
+### Coach & progress
+- **Coach chat.** Ask Claude anything. It sees your program, recent sessions, maxes and body weight, and the conversation is saved.
+- **Progress dashboard.**
+  - stats: workout count, weekly streak, total volume
+  - charts: weekly volume, estimated 1RM trend for each lift
+  - your PR list and full workout history
+- **Exercise library.** 80+ exercises with form cues, muscles worked, your best set, a chart and your full history for each one.
+- **Body weight tracking** with a chart.
+- **Tools:** a plate calculator and a 1RM / percentage calculator.
+
+### Automation & data
+- **Training-day reminders** at a time you choose. They follow your active program's schedule.
+- **Apple Health sync** for workouts and body weight (optional).
+- **CSV export** of every logged set.
+- **Your API key** is stored in the Keychain, and you can choose Opus, Sonnet or Haiku. Without a key, everything works except the AI features, and the builder falls back to smart templates.
 
 ## Run it
 
-1. Open `Liftwise/Liftwise.xcodeproj` in Xcode.
-2. Select the **Liftwise** target. Under **Signing & Capabilities**, choose your Team. You can change the bundle ID from `com.example.liftwise`.
-3. Pick an iPhone simulator or your phone and press **Run** (⌘R).
-4. In the app, go to **Settings → AI Coach** and paste an Anthropic API key from <https://console.anthropic.com>. You can skip this step and use the offline builder.
+1. Open `Liftwise/Liftwise.xcodeproj` in **Xcode 16+**. The app needs iOS 17 or later.
+2. Select the **Liftwise** target. Under **Signing & Capabilities**, choose your Team and change the bundle ID from `com.example.liftwise` if needed. The HealthKit capability is already configured in `Liftwise.entitlements`.
+3. Run on a simulator or your iPhone (⌘R).
+4. Optional: add an Anthropic API key in **Settings → AI Coach** (get one at <https://console.anthropic.com>).
 
-> The project uses Xcode 16's folder-synchronized groups, so any Swift file you add under `Liftwise/Liftwise/` is picked up automatically. If you prefer [XcodeGen](https://github.com/yonaskolb/XcodeGen), run `xcodegen` in this folder to regenerate the project from `project.yml`.
+CI: `.github/workflows/ios.yml` compiles the app on a macOS runner on every push that touches `Liftwise/`.
 
-## How the AI builder works
+## Architecture
 
-- `Services/ClaudeClient.swift` calls the Claude Messages API directly over HTTPS, because there is no official Swift SDK. It streams the response with server-sent events.
-- `Services/AIPlanBuilder.swift` holds the coach's system prompt and turns your answers into the request.
-- The request uses **structured outputs** (`output_config.format` with a JSON schema from `PlanDTO.jsonSchema`). Claude's reply is therefore always valid JSON that decodes into `PlanDTO`, and is then saved with SwiftData.
-- On Opus and Sonnet, the request also opts into server-side refusal fallbacks (`fallbacks: "default"`).
+| Area | Files |
+|---|---|
+| Data (SwiftData) | `Models/Models.swift`: Program → Week → Day → Exercise → SetLog, BodyWeightEntry, CoachMessage |
+| Plan format | `Models/PlanDTO.swift`: JSON schema for structured outputs, plus conversion to and from SwiftData |
+| Library | `Models/ExerciseCatalog.swift`, `Models/ProgramTemplates.swift` |
+| Training engine | `Services/Strength.swift`: e1RM, history index, auto-progression, plates, warm-ups |
+| AI | `Services/ClaudeClient.swift` (streaming Messages API), `Services/AIPlanBuilder.swift` (build, adjust, coach context) |
+| Offline plans | `Services/OfflinePlanBuilder.swift` |
+| System | `Services/SystemServices.swift` (notifications, HealthKit, CSV), `Services/KeychainStore.swift` |
+| UI | `Views/`: Today, Programs, Coach, Progress, Settings, workout logger, editors |
 
-## Project layout
+## Before the App Store
 
-```
-Liftwise/
-├── Liftwise.xcodeproj
-├── project.yml                 # optional XcodeGen spec
-└── Liftwise/
-    ├── App/LiftwiseApp.swift   # @main, tab bar
-    ├── Models/
-    │   ├── Models.swift        # SwiftData: Program → Week → Day → Exercise → SetLog
-    │   ├── PlanRequest.swift   # builder questionnaire
-    │   └── PlanDTO.swift       # JSON plan format + schema + save to SwiftData
-    ├── Services/
-    │   ├── ClaudeClient.swift
-    │   ├── AIPlanBuilder.swift
-    │   ├── OfflinePlanBuilder.swift
-    │   └── KeychainStore.swift
-    ├── Views/
-    │   ├── TodayView.swift
-    │   ├── ProgramsView.swift
-    │   ├── PlanBuilderView.swift
-    │   ├── WorkoutSessionView.swift
-    │   └── SettingsView.swift
-    └── Assets.xcassets
-```
-
-## Before shipping to the App Store
-
-- **Don't ship with a user-entered API key as your business model.** Put a small backend (for example a serverless function) between the app and Anthropic. The backend holds your key and enforces per-user limits, and the app calls it instead of `api.anthropic.com`. To switch, change `ClaudeClient.endpoint` and the auth header.
-- Add an app icon: drop a 1024×1024 PNG into `Assets.xcassets/AppIcon.appiconset`.
-- Consider adding sign-in and iCloud sync (SwiftData supports CloudKit), HealthKit workout export, and subscriptions through StoreKit.
+- Route AI calls through your own backend so you don't ship with user-entered keys. Change `ClaudeClient.endpoint` and the auth header.
+- Add an app icon (1024×1024) to `Assets.xcassets/AppIcon.appiconset`.
+- Consider sign-in, iCloud sync (SwiftData + CloudKit), StoreKit subscriptions, an Apple Watch companion and Live Activities for the rest timer.
