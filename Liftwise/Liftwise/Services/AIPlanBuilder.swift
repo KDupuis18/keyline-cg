@@ -56,7 +56,7 @@ struct AIPlanBuilder {
         return lines.joined(separator: "\n")
     }
 
-    func build(_ request: PlanRequest, unit: String, onText: @escaping (String) -> Void) async throws -> PlanDTO {
+    func build(_ request: PlanRequest, unit: String, onText: @escaping @MainActor (String) -> Void) async throws -> PlanDTO {
         let text = try await client.streamStructured(
             system: Self.systemPrompt,
             user: userPrompt(for: request, unit: unit),
@@ -67,4 +67,111 @@ struct AIPlanBuilder {
         guard !plan.weeks.isEmpty else { throw ClaudeClient.ClaudeError.emptyResponse }
         return plan
     }
+
+    // MARK: - Adjusting an existing program
+
+    /// Asks Claude to rewrite the not-yet-started weeks of a program per the athlete's request.
+    /// Returns only the replacement weeks (weeks with any finished workout are left untouched).
+    @MainActor
+    func adjust(program: TrainingProgram, instruction: String, context: String, unit: String,
+                onText: @escaping @MainActor (String) -> Void) async throws -> PlanDTO {
+        let lockedWeeks = program.sortedWeeks.filter { $0.days.contains(where: \.isDone) }.map(\.number)
+        let editable = program.sortedWeeks.map(\.number).filter { !lockedWeeks.contains($0) }
+        guard !editable.isEmpty else {
+            throw ClaudeClient.ClaudeError.http(status: 400, message: "Every week already has finished workouts, so there's nothing left to adjust.")
+        }
+
+        let prompt = """
+        Here is my current program as JSON:
+        \(PlanDTO(program: program).jsonString())
+
+        Weeks already started (do not change): \(lockedWeeks.isEmpty ? "none" : lockedWeeks.map(String.init).joined(separator: ", "))
+        Weeks you may rewrite: \(editable.map(String.init).joined(separator: ", "))
+
+        My recent training:
+        \(context)
+
+        Requested change: \(instruction)
+
+        Return the full program JSON. Keep the same name unless the change warrants a new one, update the \
+        summary if the approach changed, and include ALL weeks in order. Copy locked weeks exactly. Rewrite \
+        the editable weeks to apply my requested change while keeping sensible progression. Use \(unit) for any loads.
+        """
+
+        let text = try await client.streamStructured(
+            system: Self.systemPrompt, user: prompt, schema: PlanDTO.jsonSchema, onText: onText
+        )
+        var plan = try PlanDTO.decode(from: text)
+        plan.weeks = plan.weeks.filter { editable.contains($0.week) }
+        guard !plan.weeks.isEmpty else { throw ClaudeClient.ClaudeError.emptyResponse }
+        return plan
+    }
+}
+
+// MARK: - Coach context
+
+enum CoachContext {
+    /// Plain-text snapshot of the athlete's current state for Claude.
+    @MainActor
+    static func snapshot(programs: [TrainingProgram], history: TrainingHistory,
+                         bodyWeights: [BodyWeightEntry], unit: String) -> String {
+        var lines: [String] = []
+        let today = Date().formatted(date: .complete, time: .omitted)
+        lines.append("Today is \(today). Weight unit: \(unit).")
+
+        if let active = programs.first(where: \.isActive) {
+            lines.append("Active program: \(active.name): \(active.goal). \(active.doneCount)/\(active.totalCount) workouts done.")
+            if let next = active.nextWorkout {
+                let exercises = next.sortedExercises.map { "\($0.name) \($0.prescription)" }.joined(separator: "; ")
+                lines.append("Next workout: \(next.scheduleLabel) \(next.title): \(exercises)")
+            }
+        } else {
+            lines.append("No active program.")
+        }
+
+        let recent = programs.flatMap(\.allDays)
+            .filter(\.isCompleted)
+            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+            .prefix(5)
+        if !recent.isEmpty {
+            lines.append("Recent workouts:")
+            for day in recent {
+                let date = day.completedAt?.formatted(date: .abbreviated, time: .omitted) ?? ""
+                let sets = day.sortedExercises.compactMap { ex -> String? in
+                    let done = ex.sortedLogs.filter(\.completed)
+                    guard !done.isEmpty else { return nil }
+                    let s = done.map { "\(Strength.format($0.weight))x\($0.reps)\($0.rpe > 0 ? "@\(Strength.format($0.rpe))" : "")" }
+                    return "\(ex.name) \(s.joined(separator: ", "))"
+                }
+                let note = day.sessionNotes.isEmpty ? "" : " Notes: \(day.sessionNotes)"
+                lines.append("- \(date) \(day.title): \(sets.joined(separator: " | "))\(note)")
+            }
+        }
+
+        let records = history.records.prefix(8)
+        if !records.isEmpty {
+            lines.append("Estimated 1RMs: " + records.map { "\($0.name) \(Strength.format(Strength.round($0.e1rm, unit: unit)))" }.joined(separator: ", "))
+        }
+
+        let weights = bodyWeights.sorted { $0.date < $1.date }
+        if let latest = weights.last {
+            var bw = "Body weight: \(Strength.format(latest.weight)) \(unit)"
+            if let first = weights.first, weights.count > 1 {
+                let change = latest.weight - first.weight
+                bw += " (\(change >= 0 ? "+" : "")\(Strength.format(change)) since \(first.date.formatted(date: .abbreviated, time: .omitted)))"
+            }
+            lines.append(bw)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    static let coachSystemPrompt = """
+    You are the athlete's personal strength & conditioning coach inside the Liftwise workout app. \
+    You can see their program, recent sessions, estimated maxes and body weight below. Give specific, \
+    practical, encouraging answers grounded in that data: technique cues, exercise substitutions, how to \
+    handle missed sessions, fatigue, soreness, nutrition basics, and how to progress. Keep answers short \
+    and skimmable for a phone screen (a few sentences or a short list). If they want their program \
+    changed, tell them to tap "Adjust with AI" on the program screen and suggest exactly what to type. \
+    For pain, injury or medical issues, recommend seeing a qualified professional.
+    """
 }

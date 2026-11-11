@@ -1,0 +1,32 @@
+name: Build iOS app (Liftwise)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Liftwise/**'
+      - '.github/workflows/ios.yml'
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Build for iOS Simulator (no code signing)
+        working-directory: Liftwise
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Liftwise.xcodeproj \
+            -target Liftwise \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build.log | grep -E "error:|warning: .*(deprecated|unused)|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+      - name: Show compiler errors
+        if: failure()
+        working-directory: Liftwise
+        run: grep -E "error:" -A3 build.log | head -200

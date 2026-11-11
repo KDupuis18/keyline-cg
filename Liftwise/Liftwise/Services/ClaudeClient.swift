@@ -50,13 +50,28 @@ struct ClaudeClient {
         schema: [String: Any],
         effort: String = "medium",
         maxTokens: Int = 64000,
-        onText: @escaping (String) -> Void
+        onText: @escaping @MainActor (String) -> Void
+    ) async throws -> String {
+        try await stream(system: system, messages: [["role": "user", "content": user]],
+                         schema: schema, effort: effort, maxTokens: maxTokens, onText: onText)
+    }
+
+    /// Streams a response for a multi-turn conversation. Pass `schema` to force JSON output.
+    func stream(
+        system: String,
+        messages: [[String: String]],
+        schema: [String: Any]? = nil,
+        effort: String = "medium",
+        maxTokens: Int = 64000,
+        onText: @escaping @MainActor (String) -> Void
     ) async throws -> String {
         guard !apiKey.isEmpty else { throw ClaudeError.missingAPIKey }
 
-        let format: [String: Any] = ["type": "json_schema", "schema": schema]
-        let outputConfig: [String: Any] = ["effort": effort, "format": format]
-        let messages: [[String: String]] = [["role": "user", "content": user]]
+        var outputConfig: [String: Any] = ["effort": effort]
+        if let schema {
+            let format: [String: Any] = ["type": "json_schema", "schema": schema]
+            outputConfig["format"] = format
+        }
         let thinking: [String: String] = ["type": "adaptive"]
 
         var body: [String: Any] = [
@@ -106,7 +121,7 @@ struct ClaudeClient {
             case "content_block_delta":
                 if event.delta?.type == "text_delta", let chunk = event.delta?.text {
                     text += chunk
-                    onText(chunk)
+                    await onText(chunk)
                 }
             case "message_delta":
                 if let reason = event.delta?.stopReason { stopReason = reason }

@@ -30,14 +30,15 @@ final class PlanGenerationModel: ObservableObject {
                 if useAI {
                     let builder = AIPlanBuilder(client: ClaudeClient(apiKey: KeychainStore.loadAPIKey(), model: model))
                     plan = try await builder.build(request, unit: unit) { [weak self] chunk in
-                        Task { @MainActor in self?.consume(chunk) }
+                        self?.consume(chunk)
                     }
                 } else {
                     plan = OfflinePlanBuilder.build(request)
                 }
                 try Task.checkCancellation()
 
-                let program = plan.makeProgram(goal: request.goalDescription, generatedByAI: useAI, in: context)
+                let program = plan.makeProgram(goal: request.goalDescription, generatedByAI: useAI,
+                                               source: useAI ? "ai" : "template", in: context)
                 // Make the new program the active one.
                 let all = (try? context.fetch(FetchDescriptor<TrainingProgram>())) ?? []
                 for p in all { p.isActive = (p.id == program.id) }
@@ -81,14 +82,21 @@ final class PlanGenerationModel: ObservableObject {
 }
 
 struct PlanBuilderView: View {
+    var onFinished: (TrainingProgram) -> Void
+
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
     @AppStorage("weightUnit") private var weightUnit = "lb"
     @AppStorage("claudeModel") private var claudeModel = ClaudeModelOption.defaultModel
 
-    @State private var request = PlanRequest()
+    @State private var request: PlanRequest
     @State private var hasAPIKey = KeychainStore.hasAPIKey
-    @State private var createdProgram: TrainingProgram?
     @StateObject private var generation = PlanGenerationModel()
+
+    init(prefill: PlanRequest? = nil, onFinished: @escaping (TrainingProgram) -> Void) {
+        self.onFinished = onFinished
+        _request = State(initialValue: prefill ?? PlanRequest())
+    }
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
 
@@ -104,9 +112,15 @@ struct PlanBuilderView: View {
             }
             .navigationTitle("AI Plan Builder")
             .onAppear { hasAPIKey = KeychainStore.hasAPIKey }
-            .navigationDestination(item: $createdProgram) { program in
-                ProgramDetailView(program: program)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        generation.cancel()
+                        dismiss()
+                    }
+                }
             }
+            .interactiveDismissDisabled(generation.phase == .generating)
             .overlay {
                 if generation.phase == .generating {
                     GeneratingOverlay(
@@ -245,7 +259,7 @@ struct PlanBuilderView: View {
 
     private func build(useAI: Bool) {
         generation.generate(request: request, useAI: useAI, unit: weightUnit, model: claudeModel, context: context) { program in
-            createdProgram = program
+            onFinished(program)
         }
     }
 }

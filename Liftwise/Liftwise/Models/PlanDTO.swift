@@ -96,11 +96,17 @@ extension PlanDTO {
 
     /// Inserts the plan into SwiftData and returns the new program.
     @MainActor
-    func makeProgram(goal: String, generatedByAI: Bool, in context: ModelContext) -> TrainingProgram {
-        let program = TrainingProgram(name: name, summary: summary, goal: goal, generatedByAI: generatedByAI)
+    func makeProgram(goal: String, generatedByAI: Bool, source: String? = nil, in context: ModelContext) -> TrainingProgram {
+        let program = TrainingProgram(name: name, summary: summary, goal: goal, generatedByAI: generatedByAI, source: source)
         context.insert(program)
+        append(weeks: weeks, to: program)
+        return program
+    }
 
-        for (weekIndex, w) in weeks.enumerated() {
+    /// Adds DTO weeks (and their days/exercises) to an existing program.
+    @MainActor
+    func append(weeks newWeeks: [WeekDTO], to program: TrainingProgram) {
+        for (weekIndex, w) in newWeeks.enumerated() {
             let week = ProgramWeek(number: w.week > 0 ? w.week : weekIndex + 1, focus: w.focus)
             program.weeks.append(week)
 
@@ -128,6 +134,29 @@ extension PlanDTO {
                 }
             }
         }
-        return program
+    }
+
+    /// Snapshot of a saved program, used to send it back to Claude for edits.
+    init(program: TrainingProgram) {
+        name = program.name
+        summary = program.summary
+        weeks = program.sortedWeeks.map { week in
+            WeekDTO(week: week.number, focus: week.focus, days: week.sortedDays.map { day in
+                DayDTO(dayOfWeek: day.dayOfWeek, title: day.title, focus: day.focus,
+                       estimatedMinutes: day.estimatedMinutes, notes: day.notes,
+                       exercises: day.sortedExercises.map { e in
+                           ExerciseDTO(name: e.name, sets: e.sets, reps: e.reps, intensity: e.intensity,
+                                       restSeconds: e.restSeconds, notes: e.notes)
+                       })
+            })
+        }
+    }
+
+    func jsonString() -> String {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(self) else { return "{}" }
+        return String(decoding: data, as: UTF8.self)
     }
 }

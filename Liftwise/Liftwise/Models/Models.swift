@@ -13,11 +13,13 @@ final class TrainingProgram {
     var startDate: Date = Date()
     var isActive: Bool = false
     var generatedByAI: Bool = true
+    /// "ai", "template" or "custom"
+    var source: String = "ai"
 
     @Relationship(deleteRule: .cascade, inverse: \ProgramWeek.program)
     var weeks: [ProgramWeek] = []
 
-    init(name: String, summary: String, goal: String, generatedByAI: Bool) {
+    init(name: String, summary: String, goal: String, generatedByAI: Bool, source: String? = nil) {
         self.id = UUID()
         self.name = name
         self.summary = summary
@@ -26,21 +28,31 @@ final class TrainingProgram {
         self.startDate = Date()
         self.isActive = false
         self.generatedByAI = generatedByAI
+        self.source = source ?? (generatedByAI ? "ai" : "template")
     }
 
     var sortedWeeks: [ProgramWeek] { weeks.sorted { $0.number < $1.number } }
     var allDays: [WorkoutDay] { sortedWeeks.flatMap { $0.sortedDays } }
     var completedCount: Int { allDays.filter(\.isCompleted).count }
+    var doneCount: Int { allDays.filter(\.isDone).count }
     var totalCount: Int { allDays.count }
 
     var progress: Double {
-        totalCount == 0 ? 0 : Double(completedCount) / Double(totalCount)
+        totalCount == 0 ? 0 : Double(doneCount) / Double(totalCount)
     }
 
-    /// The first workout that hasn't been completed yet.
-    var nextWorkout: WorkoutDay? { allDays.first { !$0.isCompleted } }
+    /// The first workout that hasn't been completed or skipped.
+    var nextWorkout: WorkoutDay? { allDays.first { !$0.isDone } }
 
     var currentWeek: ProgramWeek? { nextWorkout?.week ?? sortedWeeks.last }
+
+    var daysPerWeek: Int { sortedWeeks.first?.days.count ?? 0 }
+
+    /// Makes this the only active program.
+    func activate(among programs: [TrainingProgram]) {
+        for p in programs { p.isActive = (p.id == id) }
+        if doneCount == 0 { startDate = Date() }
+    }
 }
 
 // MARK: - Week
@@ -63,7 +75,8 @@ final class ProgramWeek {
         days.sorted { ($0.dayOfWeek, $0.order) < ($1.dayOfWeek, $1.order) }
     }
 
-    var completedCount: Int { days.filter(\.isCompleted).count }
+    var completedCount: Int { days.filter(\.isDone).count }
+    var isDeload: Bool { focus.localizedCaseInsensitiveContains("deload") }
 }
 
 // MARK: - Day
@@ -78,6 +91,10 @@ final class WorkoutDay {
     var estimatedMinutes: Int = 45
     var notes: String = ""
     var completedAt: Date?
+    var startedAt: Date?
+    var durationSeconds: Int = 0
+    var sessionNotes: String = ""
+    var skipped: Bool = false
     var week: ProgramWeek?
 
     @Relationship(deleteRule: .cascade, inverse: \PlannedExercise.day)
@@ -93,6 +110,7 @@ final class WorkoutDay {
     }
 
     var isCompleted: Bool { completedAt != nil }
+    var isDone: Bool { isCompleted || skipped }
     var sortedExercises: [PlannedExercise] { exercises.sorted { $0.order < $1.order } }
 
     var weekdayName: String {
@@ -103,6 +121,13 @@ final class WorkoutDay {
     var scheduleLabel: String {
         "Week \(week?.number ?? 1) · \(weekdayName)"
     }
+
+    var completedSets: [SetLog] { exercises.flatMap(\.logs).filter(\.completed) }
+
+    /// Total weight × reps across completed sets.
+    var volume: Double { completedSets.reduce(0) { $0 + $1.weight * Double($1.reps) } }
+
+    var prCount: Int { completedSets.filter(\.isPR).count }
 }
 
 // MARK: - Exercise
@@ -142,11 +167,19 @@ final class PlannedExercise {
         return parts.joined(separator: " · ")
     }
 
-    /// First integer found in the rep prescription, used to prefill logs.
+    /// First integer found in the rep prescription ("8-10" → 8).
     var targetReps: Int {
-        let digits = reps.prefix { !$0.isNumber }.count
-        let rest = reps.dropFirst(digits).prefix { $0.isNumber }
-        return Int(rest) ?? 0
+        let skip = reps.prefix { !$0.isNumber }.count
+        let digits = reps.dropFirst(skip).prefix { $0.isNumber }
+        return Int(digits) ?? 0
+    }
+
+    /// Whether the prescription is time or distance based (no weight logging).
+    var isTimed: Bool {
+        let r = reps.lowercased()
+        return r.hasSuffix("s") && r.dropLast().allSatisfy(\.isNumber)
+            || r.contains("min") || r.contains("sec") || r.contains("m ") || r.hasSuffix("m")
+            || r.contains("mile") || r.contains("km") || r.contains(" on")
     }
 
     static func formatRest(_ seconds: Int) -> String {
@@ -165,7 +198,9 @@ final class SetLog {
     var setNumber: Int = 1
     var weight: Double = 0
     var reps: Int = 0
+    var rpe: Double = 0          // 0 = not recorded
     var completed: Bool = false
+    var isPR: Bool = false
     var loggedAt: Date?
     var exercise: PlannedExercise?
 
@@ -173,5 +208,36 @@ final class SetLog {
         self.setNumber = setNumber
         self.weight = weight
         self.reps = reps
+    }
+
+    var estimatedOneRepMax: Double { Strength.estimatedOneRepMax(weight: weight, reps: reps) }
+}
+
+// MARK: - Body weight
+
+@Model
+final class BodyWeightEntry {
+    var date: Date = Date()
+    var weight: Double = 0
+
+    init(date: Date, weight: Double) {
+        self.date = date
+        self.weight = weight
+    }
+}
+
+// MARK: - Coach chat
+
+@Model
+final class CoachMessage {
+    var createdAt: Date = Date()
+    /// "user" or "assistant"
+    var role: String = "user"
+    var text: String = ""
+
+    init(role: String, text: String) {
+        self.createdAt = Date()
+        self.role = role
+        self.text = text
     }
 }
